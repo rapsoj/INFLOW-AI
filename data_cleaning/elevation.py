@@ -11,7 +11,7 @@ CATCHMENTS_PATH = "Project Map and Shapefiles/INFLOW_cmts_clean/INFLOW_cmts_15/I
 ELEVATION_TIF_PATH = "dem/study_area_dem.tif"
 OUTPUT_PATH = "outputs/"
 
-# Step 1: Load catchments and ensure CRS matches a sample raster file
+# Load catchments and ensure CRS matches a sample raster file
 def load_catchments_and_align_crs(catchments_path, folder_path):
     catchments = gpd.read_file(catchments_path)
     sample_tif_path = os.path.join(folder_path, [f for f in os.listdir(folder_path) if f.endswith(".tif")][0])
@@ -19,7 +19,7 @@ def load_catchments_and_align_crs(catchments_path, folder_path):
         catchments = catchments.to_crs(src.crs)
     return catchments, sample_tif_path
 
-# Step 2: Clip a sample raster to get spatial attributes (transform, dimensions, bounds, CRS)
+# Clip a sample raster to get spatial attributes (transform, dimensions, bounds, CRS)
 def get_sample_raster_attributes(sample_tif_path, catchments):
     with rasterio.open(sample_tif_path) as src:
         clipped, clipped_transform = rasterio_mask(src, catchments.geometry, crop=True)
@@ -28,7 +28,7 @@ def get_sample_raster_attributes(sample_tif_path, catchments):
         sample_bounds = rasterio.transform.array_bounds(sample_height, sample_width, clipped_transform)
     return sample_width, sample_height, sample_crs, sample_bounds, clipped_transform
 
-# Step 3: Load and reproject elevation data to match sample CRS if necessary
+# Load and reproject elevation data to match sample CRS if necessary
 def reproject_elevation(elevation_tif_path, target_crs):
     with rasterio.open(elevation_tif_path) as elevation_ds:
         elevation_data = elevation_ds.read(1)
@@ -53,7 +53,7 @@ def reproject_elevation(elevation_tif_path, target_crs):
         else:
             return elevation_data, elevation_transform, elevation_crs
 
-# Step 4: Resample elevation data to match sample raster's spatial resolution and bounds
+# Resample elevation data to match sample raster's spatial resolution and bounds
 def resample_elevation_to_sample_bounds(elevation_data, elevation_transform, elevation_crs, sample_bounds, sample_crs, sample_width, sample_height):
     transform, width, height = calculate_default_transform(
         elevation_crs, sample_crs, sample_width, sample_height, *sample_bounds
@@ -70,11 +70,11 @@ def resample_elevation_to_sample_bounds(elevation_data, elevation_transform, ele
     )
     return resampled_elevation, transform
 
-# Step 5: Standardize elevation data
+# Standardize elevation data
 def standardize_data(data):
     return (data - np.mean(data)) / np.std(data)
 
-# Step 6: Save the elevation array with an added dimension for consistency
+# Save the elevation array with an added dimension for consistency
 def save_elevation_array(elevation_data, output_path):
     os.makedirs(output_path, exist_ok=True)
     np.save(os.path.join(output_path, 'elevation.npy'), elevation_data)

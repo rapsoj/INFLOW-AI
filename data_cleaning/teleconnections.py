@@ -5,7 +5,7 @@ from functools import reduce
 from download_teleconnections import oni, sst, mjo, soi, dmi  # Assuming each teleconnection module has a process function
 from utils import get_dates_interest, impute_missing_values  # Assuming these functions are in a utils module
 
-# Step 1: Process teleconnections data
+# Process teleconnections data
 def load_teleconnections():
     df_oni = oni.process_oni()
     df_sst = sst.process_sst()
@@ -14,7 +14,7 @@ def load_teleconnections():
     df_dmi = dmi.process_dmi()
     return [df_oni, df_sst, df_mjo, df_soi, df_dmi]
 
-# Step 2: Format teleconnection dates
+# Format teleconnection dates
 def format_teleconnection_dates(teleconnections_dfs):
     for i, df in enumerate(teleconnections_dfs):
         if 'day' not in df.columns:
@@ -27,16 +27,16 @@ def format_teleconnection_dates(teleconnections_dfs):
         teleconnections_dfs[i] = df.drop(['year', 'month', 'day'], axis=1)
     return teleconnections_dfs
 
-# Step 3: Combine teleconnections dataframes on 'date_represented' and 'date_reported'
+# Combine teleconnections dataframes on 'date_represented' and 'date_reported'
 def combine_teleconnections(teleconnections_dfs):
     return reduce(lambda left, right: pd.merge(left, right, on=['date_represented', 'date_reported'], how='outer'), teleconnections_dfs)
 
-# Step 4: Find nearest future date
+# Find nearest future date
 def find_nearest_future_date(date, date_list):
     future_dates = [d for d in date_list if d < date]
     return future_dates[-1] if future_dates else np.nan
 
-# Step 5: Align teleconnection data with dates of interest
+# Align teleconnection data with dates of interest
 def align_with_dates(teleconnections, dates_list):
     teleconnections['date'] = teleconnections['date_represented'].apply(lambda x: find_nearest_future_date(x, dates_list))
     teleconnections = teleconnections.groupby('date').mean().reset_index()
@@ -46,7 +46,7 @@ def align_with_dates(teleconnections, dates_list):
     
     return teleconnections.set_index('date').drop(['date_represented', 'date_reported'], axis=1)
 
-# Step 6: Interpolate missing values with constraints on end-of-data streaks
+# Interpolate missing values with constraints on end-of-data streaks
 def interpolate_missing_values(df):
     df_filled = df.copy()
     for col in df.columns:
@@ -70,11 +70,11 @@ def interpolate_missing_values(df):
         df[col] = df_filled[col]
     return df
 
-# Step 7: Filter data to study period
+# Filter data to study period
 def filter_study_period(df, start_date='2002-07-01'):
     return df[df.index >= pd.to_datetime(start_date)]
 
-# Step 8: Standardize teleconnections data
+# Standardize teleconnections data
 def standardize_data(df):
     scaler = StandardScaler()
     df_scaled = scaler.fit_transform(df)

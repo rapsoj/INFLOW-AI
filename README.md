@@ -1,4 +1,4 @@
-# Flood Inundation Prediction Model
+# INFLOW-AI Flood Inundation Prediction Model
 
 ## Overview
 This program is a comprehensive tool designed to predict flood inundation percentages for the INFLOW study area. It leverages temporal data, machine learning models, and Monte Carlo simulations to generate future predictions and confidence intervals. Additionally, it automates the processing, normalization, and visualization of data, providing actionable insights into flood dynamics.

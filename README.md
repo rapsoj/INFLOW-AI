@@ -150,7 +150,7 @@ The final loss is calculated as a weighted combination of the MSE, sign penalty,
 ---
 
 ## License
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](https://github.com/rapsoj/INFLOW-AI/blob/main/LICENCE.txt).
 
 ---
 

@@ -3,8 +3,7 @@
 ## Overview
 This program is a comprehensive tool designed to predict flood inundation coverage over the INFLOW study area. It leverages satellite data, machine learning models, and Monte Carlo simulations to generate 2-month predictions and 95% confidence intervals. Additionally, it automates the processing, normalisation, and visualisation of data, providing actionable insights into flood dynamics in the While Nile basin.
 
-![Flooding in White Nile basin](https://i.imgur.com/xnS2JZm.gif)
-![Alt Text](https://media.giphy.com/media/vFKqnCdLPNOKc/giphy.gif)
+![Flooding in White Nile basin](https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExN2RydmRkdng1MzNzMng5YmNlcWhjZjYxc2xydXA0Y3pncWxpeng0aiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/uyXxhhoXumIESZSUi8/giphy.gif)
 
 
 ---

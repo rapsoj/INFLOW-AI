@@ -68,7 +68,7 @@ This program is a comprehensive tool designed to predict flood inundation covera
 
 `python __main__.py`
 
-3. **Visualization**: After execution, view the generated graphs and reports in the `/output` directory.
+3. **Visualisation**: After execution, view the generated graphs and reports in the `/output` directory.
 
 <img src="https://i.imgur.com/m8T8OQW.png" alt="Predictions compared with past year" width="600"/>
 
@@ -79,16 +79,16 @@ This program is a comprehensive tool designed to predict flood inundation covera
 ## Program Workflow
 1. **Data Ingestion**: 
 - The program reads temporal and baseline data from CSV files.
-2. **Data Normalization**: 
+2. **Data Normalisation**: 
 - Data is scaled to ensure compatibility with machine learning models.
 3. **Model Training**: 
 - Trains a regression model on the baseline data.
 4. **Monte Carlo Simulation**: 
 - Generates predictions and confidence intervals based on 10,000 iterations.
-5. **Visualization**: 
+5. **Visualisation**: 
 - Produces heatmaps and time-series plots of flood inundation predictions.
 6. **Output**: 
-- Saves prediction data and visualizations in the `/output` directory.
+- Saves prediction data and visualisations in the `/output` directory.
 
 
 ---
@@ -105,7 +105,7 @@ This model is a **Temporal Transformer-based Recurrent Model** designed for sequ
   - The model incorporates **positional encoding** to capture the order of the time steps in the input sequence. This encoding is added to the input data before being fed into the transformer encoder. The positional encoding is generated using a sinusoidal function, which is common in transformer models for sequence processing.
 
 - **Transformer Encoder**: 
-  - The core of the model is the **Transformer Encoder**, which processes the sequential input data. The encoder consists of multi-head self-attention layers and feed-forward layers, both equipped with dropout regularization and layer normalization.
+  - The core of the model is the **Transformer Encoder**, which processes the sequential input data. The encoder consists of multi-head self-attention layers and feed-forward layers, both equipped with dropout regularisation and layer normalisation.
   - The attention mechanism allows the model to focus on different parts of the sequence when making predictions, and the feed-forward layers learn non-linear relationships.
   
 - **Feed-forward Network**:
@@ -117,7 +117,7 @@ This model is a **Temporal Transformer-based Recurrent Model** designed for sequ
 ### Loss Function
 
 The model uses a **custom loss function** that combines the Mean Squared Error (MSE) with two additional penalties:
-1. **Sign Penalty**: A penalty term that penalizes predictions where the sign of the predicted values does not match the sign of the true values. This helps the model to maintain consistency in the directionality of the predictions.
+1. **Sign Penalty**: A penalty term that penalises predictions where the sign of the predicted values does not match the sign of the true values. This helps the model to maintain consistency in the directionality of the predictions.
 2. **Sum Penalty**: A penalty that ensures the sum of predicted values closely matches the sum of true values across all time steps in the sequence. This is particularly useful in temporal data where the overall trend or aggregate behavior of the series is important.
 
 The final loss is calculated as a weighted combination of the MSE, sign penalty, and sum penalty.
@@ -130,7 +130,7 @@ The final loss is calculated as a weighted combination of the MSE, sign penalty,
 
 - **Early Stopping**: During training, **early stopping** is used to prevent overfitting by monitoring the validation loss and stopping training when the performance plateaus for a specified number of epochs.
 
-- **Optimization**: The model is compiled using the **Adam optimizer** with a learning rate of 0.0001, and the model is trained to minimize the custom loss function.
+- **Optimisation**: The model is compiled using the **Adam optimiser** with a learning rate of 0.0001, and the model is trained to minimise the custom loss function.
 
 ### Model Evaluation
 

@@ -137,7 +137,7 @@ The final loss is calculated as a weighted combination of the MSE, sign penalty,
 
 <img src="https://i.imgur.com/m8T8OQW.png" alt="Predictions compared with past year" width="600"/>
 
-<img src="https://i.imgur.com/NUFHPcr" alt="Predictions compared with past five years" width="600"/>
+<img src="https://i.imgur.com/NUFHPcr.png" alt="Predictions compared with past five years" width="600"/>
 
 
 ---

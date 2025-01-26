@@ -3,6 +3,8 @@
 ## Overview
 This program is a comprehensive tool designed to predict flood inundation coverage over the INFLOW study area. It leverages satellite data, machine learning models, and Monte Carlo simulations to generate 2-month predictions and 95% confidence intervals. Additionally, it automates the processing, normalisation, and visualisation of data, providing actionable insights into flood dynamics in the While Nile basin.
 
+![Flooding in White Nile basin]((https://i.imgur.com/xnS2JZm.gif)
+
 ---
 
 ## Table of Contents
@@ -10,7 +12,9 @@ This program is a comprehensive tool designed to predict flood inundation covera
 2. [Installation](#installation)  
 3. [Usage](#usage)  
 4. [Program Workflow](#program-workflow)  
-5. [Contributors](#contributors)  
+5. [Model Description](#model-description)
+6. [License](#licence)
+7. [Contact](#contact)
 
 ---
 
@@ -57,9 +61,13 @@ This program is a comprehensive tool designed to predict flood inundation covera
 1. **Data Preparation**: Ensure your input data files (`temporal_data.csv` and `baseline_data.csv`) are correctly formatted and located in the designated folder (`/data` by default).
 2. **Run the Program**: Use the following command to start the program:
 
-`python main.py`
+`python __main__.py`
 
 3. **Visualization**: After execution, view the generated graphs and reports in the `/output` directory.
+
+<img src="https://i.imgur.com/m8T8OQW.png" alt="Predictions compared with past year" width="600"/>
+
+<img src="https://i.imgur.com/NUFHPcr.png" alt="Predictions compared with past five years" width="600"/>
 
 ---
 
@@ -134,11 +142,6 @@ The final loss is calculated as a weighted combination of the MSE, sign penalty,
 - Custom loss function with penalties for sign consistency and sum preservation.
 - Early stopping to prevent overfitting.
 - Model evaluation using MSE and MAE.
-
-<img src="https://i.imgur.com/m8T8OQW.png" alt="Predictions compared with past year" width="600"/>
-
-<img src="https://i.imgur.com/NUFHPcr.png" alt="Predictions compared with past five years" width="600"/>
-
 
 ---
 

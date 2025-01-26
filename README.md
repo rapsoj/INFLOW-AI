@@ -15,14 +15,26 @@ This program is a comprehensive tool designed to predict flood inundation percen
 ---
 
 ## Requirements
-- Python 3.8 or higher
+- Python 3.11 or higher
 - Required Python libraries:
-  - `pandas`
-  - `numpy`
-  - `matplotlib`
-  - `seaborn`
-  - `scikit-learn`
-  - `scipy`
+  - `datetime==5.5`
+  - `geopandas==1.0.1`
+  - `h5py==3.12.1`
+  - `loguru==0.7.3`
+  - `matplotlib==3.10.0`
+  - `netCDF4==1.7.2`
+  - `numpy==1.26.4`
+  - `pandas==2.2.2`
+  - `pathlib==1.0.1`
+  - `py_hydroweb==1.0.2`
+  - `rasterio==1.4.3`
+  - `requests==2.32.3`
+  - `scikit-learn==1.6.1`
+  - `scipy==1.13.1`
+  - `tensorflow==2.17.1`
+  - `tqdm==4.67.1`
+  - `typer==0.15.1`
+  - `xarray==2025.1.1`
 - Operating system: Windows, macOS, or Linux
 
 ---

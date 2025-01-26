@@ -49,10 +49,14 @@ This program is a comprehensive tool designed to predict flood inundation covera
 'git clone https://github.com/your-repository/flood-inundation-prediction.git`
 `cd flood-inundation-prediction`
 
-2. Set up a virtual environment (optional but recommended):
+2. Download the data:
+   - Data can be downloaded from the [Google Drive](https://drive.google.com/drive/folders/1TW4Vfhu9SrrVrvonclicaWqy5hHBY7vv?usp=sharing)
+   - Save the folder as `data` in the parent directory
+
+4. Set up a virtual environment (optional but recommended):
 `python3 -m venv env source env/bin/activate # On Windows, use env\Scripts\activate`
 
-3. Install the required libraries:
+5. Install the required libraries:
 `pip install -r requirements.txt`
 
 

@@ -78,7 +78,9 @@ This program is a comprehensive tool designed to predict flood inundation covera
 - Saves prediction data and visualizations in the `/output` directory.
 
 
-![Predictions](https://i.imgur.com/m8T8OQW.png)
+![Predictions compared with past year](https://i.imgur.com/m8T8OQW.png)
+
+![Predictions compard with past five years](https://i.imgur.com/NUFHPcr.png)
 
 
 ---

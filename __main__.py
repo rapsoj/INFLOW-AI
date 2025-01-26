@@ -322,7 +322,7 @@ def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_uns
 	                            'percent_inundation_prediction': inundation_pred[0],
 	                            'upper_bound_95': upper_bound_unscaled_inundation[0]}, index=future_dates)
 
-	predictions.to_csv(f'predictions/inundation_predictions_{predictions.index[0]}_to_{predictions.index[0]}.csv')
+	predictions.to_csv(f'predictions/inundation_predictions_{predictions.index[0]}_to_{predictions.index[-1]}.csv')
 
 
 def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inundation,

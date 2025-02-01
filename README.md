@@ -5,7 +5,7 @@ This program is a machine learning model designed to predict flood inundation co
 
 ![Timelapse GIF](https://raw.githubusercontent.com/rapsoj/INFLOW-AI/main/predictions/graphs/timelase-compressed.gif)
 
-*Inundation masks of White Nile basin from the MODIS satellite mission.*
+*Inundation masks of the White Nile basin from the MODIS satellite mission.*
 
 ---
 

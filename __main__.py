@@ -59,7 +59,7 @@ def check_if_new_data(data_path='data/temporal_data_seasonal_df.csv'):
 		data_path: Path to temporal data from previous update.
 	"""
 	data = pd.read_csv(data_path, index_col=0)
-	today = datetime.today().strftime("%Y-%m-%d")
+	today_date = datetime.today().strftime("%Y-%m-%d")
 	last_date = data.index[-1]
 	possible_dates = cleaning_utils.get_dates_of_interest(last_date)
 	missing_dates = cleaning_utils.get_dates_of_interest(last_date, today_date)[1:]
@@ -165,14 +165,13 @@ def create_dataframe():
 
 
 def custom_loss(y_true, y_pred):
-	"""
-	Custom loss function for temporal model that adds a sign penalty to predictions.
-
-	Parameters:
-		y_true (array): True target values to predict.
-		y_pred (array): Predicted target values from model.
-	"""
-
+    """
+    Custom loss function for temporal model that adds a sign penalty to predictions.
+    
+    Parameters:
+        y_true (array): True target values to predict.
+        y_pred (array): Predicted target values from model.
+    """
     # MSE for individual predictions
     mse = tf.reduce_mean(tf.square(y_true - y_pred))
     sign_penalty = tf.reduce_mean(tf.where(tf.sign(y_true) != tf.sign(y_pred), 20.0, 1.0))
@@ -368,7 +367,7 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 		plt.grid(True)
 		plt.xticks(rotation=45)
 
-		plt.savefig(f'predictions/graphs/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_{x_lim_names[x_lim]}.png', dpi=300)
+		plt.savefig(f"predictions/graphs/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_{x_lim_names[x_lim]}.png", dpi=300)
 		plt.close()
 
 	# Convert the index to a datetime index if it's not already
@@ -434,28 +433,30 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 	ax.legend().remove()
 
 	plt.tight_layout()
-	plt.savefig(f'predictions/graphs/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_year_by_year_comparison.png', dpi=300)
+	plt.savefig(f"predictions/graphs/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_year_by_year_comparison.png", dpi=300)
 	plt.close()
 
 
 def main():
+	
 	"""
 	Main function to run model produce updated predictions.
 	"""
+	
 	try: 
-		update_data()
-		future_dates = get_future_dates()
-		data = create_dataframe()
-		y_pred, X_pred, model_delta = predict_new_inundation(data)
-		inundation_pred, lb_pred, up_pred = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta)
-		export_csv(inundation_pred, lb_pred, up_pred, future_dates)
-		export_graphs(data, future_dates, inundation_pred, lb_pred, up_pred)
+	    update_data()
+	    future_dates = get_future_dates()
+	    data = create_dataframe()
+	    y_pred, X_pred, model_delta = predict_new_inundation(data)
+	    inundation_pred, lb_pred, up_pred = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta)
+	    export_csv(inundation_pred, lb_pred, up_pred, future_dates)
+	    export_graphs(data, future_dates, inundation_pred, lb_pred, up_pred)
 
-		logging.info(f"Predictions exported.")
+	    logging.info(f"Predictions exported.")
 
 	except Exception as e:
-        print(f"Error occurred while exporting predictions: {e}")
+	    print(f"Error occurred while exporting predictions: {e}")
 
 
 if __name__ == "__main__":
-    main()
+	main()

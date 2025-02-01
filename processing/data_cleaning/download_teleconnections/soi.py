@@ -43,7 +43,7 @@ def read_full_soi_data_anomaly(path: Path | None = None) -> pd.DataFrame:
     subset by time."""
     # Raw data file contains two fixed-width files: first is not standardized, and second is
     # standardized. The standardized values are the most common representation of SOI.
-    path = DATA_ROOT / 'data/raw/teleconnections' / 'soi.txt'
+    path = DATA_ROOT / 'data/downloads/teleconnections' / 'soi.txt'
     with path.open("r") as fp:
         # Get line number that contains "STANDARDIZED DATA"
         skip_lines = []
@@ -71,7 +71,7 @@ def read_full_soi_data(path: Path | None = None) -> pd.DataFrame:
     subset by time."""
     # Raw data file contains two fixed-width files: first is not standardized, and second is
     # standardized. The standardized values are the most common representation of SOI.
-    path = DATA_ROOT / 'data/raw/teleconnections' / 'soi.txt'
+    path = DATA_ROOT / 'data/downloads/teleconnections' / 'soi.txt'
     with path.open("r") as fp:
         # Get line number that contains "STANDARDIZED DATA"
         line_no = 0

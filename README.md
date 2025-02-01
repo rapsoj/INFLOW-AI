@@ -37,9 +37,10 @@ This program is a machine learning model designed to predict flood inundation co
   - `requests==2.32.3`
   - `scikit-learn==1.6.1`
   - `scipy==1.13.1`
-  - `tensorflow==2.17.1`
-  - `tqdm==4.67.1`
+  - `tensorflow==2.18.0`
+  - `tqdm>=4.66.1`
   - `typer==0.15.1`
+  - `wget==3.2`
   - `xarray==2025.1.1`
 - Operating system: Windows, macOS, or Linux
 

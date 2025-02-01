@@ -168,7 +168,7 @@ def process_and_clip_rasters(tif_files, folder_path, catchments):
 
     return clipped_tif_files, tif_file_names, spatial_metadata
 
-def get_historic_dates(data_path='data/historic/inundation_temporal.csv'):
+def get_historic_dates(data_path='data/historic/inundation_temporal_unscaled.csv'):
     """
     Get list of historic dates from pre-downloaded data.
 

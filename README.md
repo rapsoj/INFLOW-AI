@@ -4,6 +4,7 @@
 This program is a machine learning model designed to predict flood inundation coverage over the INFLOW study area. It leverages satellite data, transformer modls, and Monte Carlo simulations to generate 2-month predictions and 95% confidence intervals. It also automates the processing, normalisation, and visualisation of data, providing actionable insights into flood dynamics in the While Nile basin.
 
 ![Timelapse GIF](https://raw.githubusercontent.com/rapsoj/INFLOW-AI/main/predictions/graphs/timelase-compressed.gif)
+
 *Inundation masks of White Nile basin from the MODIS satellite mission.*
 
 ---

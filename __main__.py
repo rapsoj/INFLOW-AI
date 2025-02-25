@@ -1,3 +1,6 @@
+# Import system libraries
+import os
+
 # Import cleaning utils
 from processing import cleaning_utils
 
@@ -125,7 +128,8 @@ def create_dataframe():
 	    gridded_rainfall_cumulative_temporal.rename({'cumulative_rainfall': 'rainfall_cumulative'}, axis=1),
 	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1),
 	    inundation_temporal_delta
-	], axis=1).dropna()
+	], axis=1)
+	temporal_data_df = cleaning_utils.impute_missing_values(temporal_data_df, temporal_data_df.columns)
 
 	# Create month-day index and load saved seasonal statistics for scaling
 	temporal_data_df['month_day'] = pd.to_datetime(temporal_data_df.index).strftime('%m-%d')
@@ -197,7 +201,7 @@ def predict_new_inundation(data, model_path='model/temporal_model.keras', custom
 		custom_loss_function (function): Function to calculate custom loss for model.
 	"""
 	# Select data for prediction
-	X_pred = create_dataframe().iloc[-36:,:-1].values
+	X_pred = data.iloc[-36:,:-1].values
 	X_pred_reshaped = np.expand_dims(X_pred, axis=0)
 
 	# Load model and custom loss function
@@ -206,7 +210,7 @@ def predict_new_inundation(data, model_path='model/temporal_model.keras', custom
 
 	logging.info(f"New inundation predicted.")
 
-	return y_pred, X_pred, model_delta
+	return y_pred, X_pred_reshaped, model_delta
 
 
 def monte_carlo_predictions(model, X, num_samples=100):
@@ -254,7 +258,13 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 		future_dates (list): List of dates for prediction in format 'YYYY-MM-DD'
 		model_delta (model): Keras model trained on full temporal dataset.
 	"""
-	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')
+	# Load unscaled temporal inundation data
+	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date').reindex(data.index)
+	inundation_temporal_unscaled = cleaning_utils.impute_missing_values(inundation_temporal_unscaled, inundation_temporal_unscaled.columns)
+	
+	# Load seasonal statistics
+	means = pd.read_csv('data/stats/seasonal_means.csv', index_col='month_day')
+	stds = pd.read_csv('data/stats/seasonal_stds.csv', index_col='month_day')
 
 	# Intialise arrays to store unscaled values
 	y_pred_unscaled = np.zeros(y_pred.shape)
@@ -278,12 +288,11 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 	index_stds = stds.loc[future_month_days]['inundation_delta']
 
 	# Unscale predictions
-	y_test_unscaled[0] = y_test[0] * index_stds.values + index_means.values
 	y_pred_unscaled[0] = y_pred[0] * index_stds.values + index_means.values
 
 	# Perform Monte Carlo sampling with drop out
 	num_samples = 1000  # Number of MC dropout samples
-	preds_mean, preds_std = monte_carlo_predictions(model_delta, X_pred_reshaped, num_samples=num_samples)
+	preds_mean, preds_std = monte_carlo_predictions(model_delta, X_pred, num_samples=num_samples)
 	preds_mean_unscaled = y_pred[0] * index_stds.values + index_means.values
 
 	# Perform confidence correction
@@ -310,28 +319,40 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 	    upper_bound_unscaled_inundation[0][j] = upper_bound_unscaled_inundation[0][j - 1] + upper_bounds_unscaled[0][j]
 
 
-	return inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation
+	return inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation, inundation_temporal_unscaled
 
 
 def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation, future_dates):
 	"""
 	Export CSV with predictions and 95% upper and lower confidence intervals.
 	"""
+    # Create predictions dataframe
 	predictions = pd.DataFrame({'lower_bound_95': lower_bound_unscaled_inundation[0],
 	                            'percent_inundation_prediction': inundation_pred[0],
 	                            'upper_bound_95': upper_bound_unscaled_inundation[0]}, index=future_dates)
-
-	predictions.to_csv(f'predictions/inundation_predictions_{predictions.index[0]}_to_{predictions.index[-1]}.csv')
+	 
+	# Define the folder path
+	folder_path = f"predictions/inundation_predictions_{predictions.index[0]}_to_{predictions.index[-1]}"
+	
+	# Create the folder if it doesn't exist
+	if not os.path.exists(folder_path):
+	    os.makedirs(folder_path)
+	    print(f"Folder created: {folder_path}")
+	else:
+	    print(f"Folder already exists: {folder_path}")
+    
+    # Export predictions as CSV
+	predictions.to_csv(f'{folder_path}/{predictions.index[0]}_to_{predictions.index[-1]}.csv')
 
 
 def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inundation,
-			      upper_bound_unscaled_inundation, inundation_temporal_unscaled_path='data/historic/inundation_temporal_unscaled.csv'):
+			      upper_bound_unscaled_inundation, inundation_temporal_unscaled):
 	"""
 	Export various graphs plotting the new inundation predictions.
 	"""
 	# Convert dates to datetime format for better control over x-axis formattingdates.index = pd.to_datetime(dates.index)  # Ensure dates are in datetime format
 	pred_dates = pd.to_datetime(future_dates)    # Ensure pred_dates are in datetime format
-	pred_dates = np.insert(pred_dates, 0, temporal_data_seasonal_df.index[-1])
+	pred_dates = np.insert(pred_dates, 0, data.index[-1])
 
 	# Format prediction data
 	inundation_pred_formatted = np.insert(inundation_pred[0], 0, inundation_temporal_unscaled['percent_inundation'].iloc[-1])
@@ -341,11 +362,11 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 	# Create three different plots at different scales
 	x_lims = [data.index[0], data.index[-180], data.index[-36]]
 	x_lim_names = ['total_record', 'past_five_years', 'past_year']
-	for x_lim in range(len(x_lims)):
+	for i in range(len(x_lims)):
 
 		# Plot the test sequence true vs predicted values
 		plt.figure(figsize=(10, 6))
-		plt.plot(pd.to_datetime(temporal_data_seasonal_df.index), inundation_temporal_unscaled['percent_inundation'].iloc[1:], label='Flood Coverage per MODIS Satellite Data', marker='o', linestyle='-', color='blue')
+		plt.plot(pd.to_datetime(data.index), inundation_temporal_unscaled['percent_inundation'], label='Flood Coverage per MODIS Satellite Data', marker='o', linestyle='-', color='blue')
 		plt.plot(pred_dates, inundation_pred_formatted, label='Predicted Flood Coverage (Updated November 1st)', marker='x', linestyle='--', color='red')
 
 		# Fill the area between the lower and upper bounds
@@ -362,12 +383,13 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 		plt.ylabel('Flood Coverage Over INFLOW Study Area (%)')
 		plt.ylim(inundation_temporal_unscaled['percent_inundation'].min() - 0.01, inundation_temporal_unscaled['percent_inundation'].max() + 0.01)
 		plt.title(f"Predicted Flood Coverage Over INFLOW Study Area, {pred_dates[1].date().strftime('%Y-%m-%d')} to {pred_dates.max().date().strftime('%Y-%m-%d')}")
-		plt.xlim(pd.Timestamp(x_lim), pd.Timestamp(future_dates[-1]) + timedelta(days=100))
+		plt.xlim(pd.Timestamp(x_lims[i]), pd.Timestamp(future_dates[-1]) + timedelta(days=100))
 		plt.legend()
 		plt.grid(True)
 		plt.xticks(rotation=45)
-
-		plt.savefig(f"predictions/graphs/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_{x_lim_names[x_lim]}.png", dpi=300)
+		
+		folder_path = f"predictions/inundation_predictions_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}"
+		plt.savefig(f"{folder_path}/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_{x_lim_names[i]}.png", dpi=300)
 		plt.close()
 
 	# Convert the index to a datetime index if it's not already
@@ -423,7 +445,7 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 	            fontsize=10, verticalalignment='center')
 
 	# Formatting the plot
-	ax.set_title(f"Flood Coverage Over INFLOW Study Area, {pred_dates[1].date().strftime('%Y-%m-%d')} to {pred_dates.max().date().strftime('%Y-%m-%d')}, ({datetime.today().year} Highlighted in Red)")
+	ax.set_title(f"Flood Coverage Over INFLOW Study Area, {pred_dates[1].date().strftime('%Y-%m-%d')} to {pred_dates.max().date().strftime('%Y-%m-%d')} ({datetime.today().year} Highlighted in Red)")
 	ax.set_xlabel('Month of Year')
 	ax.set_ylabel('Flood Coverage Over INFLOW Study Area (%)')
 	ax.xaxis.set_major_locator(mdates.MonthLocator())  # Optional: Major ticks by month
@@ -433,7 +455,8 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 	ax.legend().remove()
 
 	plt.tight_layout()
-	plt.savefig(f"predictions/graphs/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_year_by_year_comparison.png", dpi=300)
+	folder_path = f"predictions/inundation_predictions_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}"
+	plt.savefig(f"{folder_path}/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_year_by_year_comparison.png", dpi=300)
 	plt.close()
 
 
@@ -445,12 +468,12 @@ def main():
 	
 	try: 
 	    update_data()
-	    future_dates = get_future_dates()
 	    data = create_dataframe()
+	    future_dates = get_future_dates(data)
 	    y_pred, X_pred, model_delta = predict_new_inundation(data)
-	    inundation_pred, lb_pred, up_pred = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta)
-	    export_csv(inundation_pred, lb_pred, up_pred, future_dates)
-	    export_graphs(data, future_dates, inundation_pred, lb_pred, up_pred)
+	    inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta)
+	    export_csv(inundation_pred, lb_pred, ub_pred, future_dates)
+	    export_graphs(data, future_dates, inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled)
 
 	    logging.info(f"Predictions exported.")
 

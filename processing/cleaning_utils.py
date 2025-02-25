@@ -67,8 +67,10 @@ def impute_missing_values(df, cols, regression_length=6):
     current_date = pd.Timestamp.now()
 
     # Filter dates that are before the current date
+    original_index = df.index
+    df.index = pd.to_datetime(df.index)
     dates = df.index
-    past_dates = dates[dates <= current_date][:-1]
+    past_dates = dates[dates <= current_date]
     data = df.loc[past_dates]
 
     # Loop through each column to impute missing values
@@ -80,10 +82,10 @@ def impute_missing_values(df, cols, regression_length=6):
 
         if forecast_steps == 0 or len(past_data) < regression_length:
             # If there are no missing values to impute or not enough past data, skip this column
-            print(f"Skipping column {col}: insufficient data or no missing values.")
             continue
 
         # Prepare data for linear regression
+        print(f"Imputing {forecast_steps} timestep for {col}.")
         series = past_data[col]
         X = np.arange(len(series)).reshape(-1, 1)  # Time index (0, 1, ..., n)
         y = series.values  # Corresponding values
@@ -104,5 +106,8 @@ def impute_missing_values(df, cols, regression_length=6):
 
         # Combine the forecasted values with the original data
         df.loc[future_indices, col] = forecast_df
+    
+    # Reset index
+    df.index = original_index
 
     return df

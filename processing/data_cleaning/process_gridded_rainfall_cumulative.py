@@ -151,32 +151,33 @@ def update_gridded_rainfall_cumulative(
         
         if len(gridded_rainfall_new) == 0:
             logging.info("No new files to process.")
-
-        # Calculate cumulative values for new data using most recent past data array
-        cum_rainfall_mean, cum_rainfall_std = read_stats(stats_file_path)
-        rainfall_3d_array_cumulative_last_unstandardised = unstandardize_array(gridded_rainfall_cumulative_last, cum_rainfall_mean, cum_rainfall_std)
-
-		# Cumulative sum most recent values
-        new_cumsum = np.cumsum(np.concatenate((rainfall_3d_array_cumulative_last_unstandardised, gridded_rainfall_new), axis=0), axis=0)[1:]
-
-		# Standard scale new data based on saved values
-        new_data = standardize_array(new_cumsum, cum_rainfall_mean, cum_rainfall_std)
-        
-        # Update temporal data
-        temporal_df = pd.DataFrame({'cumulative_rainfall': new_data.sum(axis=(1, 2))})
-        temporal_df['date'] = new_dates
-        temporal_mean, temporal_std = read_stats(stats_file_path, temporal=True)
-        temporal_df['cumulative_rainfall'] = (temporal_df['cumulative_rainfall'] - temporal_mean) / temporal_std
-        temporal_historic = pd.read_csv(temporal_data_path)
-        temporal_updated = pd.concat([temporal_historic, temporal_df])
-        temporal_updated.to_csv(temporal_data_path, index=False)
-
-        # Append new data to HDF5
-        with h5py.File(data_path, 'a') as hdf:
-            dset = hdf['cumulative_rainfall']
-            dset.resize(dset.shape[0] + new_data.shape[0], axis=0)
-            dset[-new_data.shape[0]:] = new_data
-            logging.info(f"Updated cumulative rainfall dataset shape: {dset.shape}")
+            
+        else:
+            # Calculate cumulative values for new data using most recent past data array
+            cum_rainfall_mean, cum_rainfall_std = read_stats(stats_file_path)
+            rainfall_3d_array_cumulative_last_unstandardised = unstandardize_array(gridded_rainfall_cumulative_last, cum_rainfall_mean, cum_rainfall_std)
+    
+    		# Cumulative sum most recent values
+            new_cumsum = np.cumsum(np.concatenate((rainfall_3d_array_cumulative_last_unstandardised, gridded_rainfall_new), axis=0), axis=0)[1:]
+    
+    		# Standard scale new data based on saved values
+            new_data = standardize_array(new_cumsum, cum_rainfall_mean, cum_rainfall_std)
+            
+            # Update temporal data
+            temporal_df = pd.DataFrame({'cumulative_rainfall': new_data.sum(axis=(1, 2))})
+            temporal_df['date'] = new_dates
+            temporal_mean, temporal_std = read_stats(stats_file_path, temporal=True)
+            temporal_df['cumulative_rainfall'] = (temporal_df['cumulative_rainfall'] - temporal_mean) / temporal_std
+            temporal_historic = pd.read_csv(temporal_data_path)
+            temporal_updated = pd.concat([temporal_historic, temporal_df])
+            temporal_updated.to_csv(temporal_data_path, index=False)
+    
+            # Append new data to HDF5
+            with h5py.File(data_path, 'a') as hdf:
+                dset = hdf['cumulative_rainfall']
+                dset.resize(dset.shape[0] + new_data.shape[0], axis=0)
+                dset[-new_data.shape[0]:] = new_data
+                logging.info(f"Updated cumulative rainfall dataset shape: {dset.shape}")
 
     except Exception as e:
         logging.error(f"Error processing cumulative rainfall data: {e}")

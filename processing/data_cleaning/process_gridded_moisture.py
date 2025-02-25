@@ -129,7 +129,7 @@ def download_gridded_moisture(dates_list, download_path):
             "resolution": 0.25,
             "start_date": dates_list[0],
             "end_date": dates_list[-1],
-            "version": '2.3.0',
+            "version": '2.3.1',
             "localdata_dir": download_path
             })
     except Exception as e:
@@ -156,7 +156,7 @@ def extract_gridded_moisture(dates_list, download_path):
             "resolution": 0.25,
             "start_date": dates_list[0],
             "end_date": dates_list[-1],
-            "version": '2.3.0',
+            "version": '2.3.1',
             "localdata_dir": download_path
             })
 
@@ -447,7 +447,7 @@ def process_new_gridded_moisture(moisture_dekads_folder,
 
 def update_gridded_moisture(
         download_folder='data/downloads', 
-        download_path='data/downloads/tamsat/soil_moisture/data/v2.3.0/daily',
+        download_path='data/downloads/tamsat/soil_moisture/data/v2.3.1/daily',
         extract_folder='data/downloads/extracted_data/domain',
         dekads_path='data/downloads/tamsat/soil_moisture/dekads',
         stats_file_path="data/stats/gridded_moisture_stats.txt",
@@ -479,22 +479,23 @@ def update_gridded_moisture(
         
         if len(new_data) == 0:
             logging.info("No new files to process.")
-
-        # Update temporal data
-        temporal_df = pd.DataFrame({'moisture': new_data.sum(axis=(1, 2))})
-        temporal_df['date'] = new_dates
-        temporal_mean, temporal_std = read_stats(stats_file_path, temporal=True)
-        temporal_df['moisture'] = (temporal_df['moisture'] - temporal_mean) / temporal_std
-        temporal_historic = pd.read_csv(temporal_data_path)
-        temporal_updated = pd.concat([temporal_historic, temporal_df])
-        temporal_updated.to_csv(temporal_data_path, index=False)
-
-        # Append new data to HDF5
-        with h5py.File('data/historic/gridded_moisture.h5', 'a') as hdf:
-            dset = hdf['moisture']
-            dset.resize(dset.shape[0] + new_data.shape[0], axis=0)
-            dset[-new_data.shape[0]:] = new_data
-            logging.info(f"Updated moisture dataset shape: {dset.shape}")
+            
+        else:
+            # Update temporal data
+            temporal_df = pd.DataFrame({'moisture': new_data.sum(axis=(1, 2))})
+            temporal_df['date'] = new_dates
+            temporal_mean, temporal_std = read_stats(stats_file_path, temporal=True)
+            temporal_df['moisture'] = (temporal_df['moisture'] - temporal_mean) / temporal_std
+            temporal_historic = pd.read_csv(temporal_data_path)
+            temporal_updated = pd.concat([temporal_historic, temporal_df])
+            temporal_updated.to_csv(temporal_data_path, index=False)
+    
+            # Append new data to HDF5
+            with h5py.File('data/historic/gridded_moisture.h5', 'a') as hdf:
+                dset = hdf['moisture']
+                dset.resize(dset.shape[0] + new_data.shape[0], axis=0)
+                dset[-new_data.shape[0]:] = new_data
+                logging.info(f"Updated moisture dataset shape: {dset.shape}")
 
     except Exception as e:
         logging.error(f"Error processing moisture data: {e}")

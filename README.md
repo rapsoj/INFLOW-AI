@@ -65,7 +65,7 @@ This program is a machine learning model designed to predict flood inundation co
 ---
 
 ## Usage
-1. **Data Preparation**: Ensure your input data files (`temporal_data.csv` and `baseline_data.csv`) are correctly formatted and located in the designated folder (`/data` by default).
+1. **Data Preparation**: Ensure your input data file `temporal_data_seasonal_df.csv` is correctly formatted and located in the designated folder (`/data` by default).
 2. **Run the Program**: Use the following command to start the program:
 
 `python __main__.py`

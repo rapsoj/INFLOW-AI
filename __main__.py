@@ -123,10 +123,10 @@ def create_dataframe():
 	    kyoga,
 	    rainfall,
 	    teleconnections,
-	    inundation_temporal_scaled.rename({'percent_inundation': 'inundation_temporal'}, axis=1),
-	    gridded_rainfall_temporal.rename({'rainfall': 'rainfall_3d_temporal'}, axis=1),
-	    gridded_rainfall_cumulative_temporal.rename({'cumulative_rainfall': 'rainfall_cumulative'}, axis=1),
-	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1),
+	    inundation_temporal_scaled.rename({'percent_inundation': 'inundation_temporal'}, axis=1)[['percent_inundation']],
+	    gridded_rainfall_temporal.rename({'rainfall': 'rainfall_3d_temporal'}, axis=1)[['rainfall']],
+	    gridded_rainfall_cumulative_temporal.rename({'cumulative_rainfall': 'rainfall_cumulative'}, axis=1)[['cumulative_rainfall']],
+	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1)[['moisture']],
 	    inundation_temporal_delta
 	], axis=1)
 	temporal_data_df = cleaning_utils.impute_missing_values(temporal_data_df, temporal_data_df.columns)
@@ -302,8 +302,8 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 	# Calculate confidence intervals using z-scores
 	confidence_level = 0.95
 	z_score = norm.ppf(1 - (1 - confidence_level) / 2)  # 1.96 for 95% CI
-	lower_bounds[0] = preds_mean - z_score * preds_std
-	upper_bounds[0] = preds_mean + z_score * preds_std
+	lower_bounds[0] = y_pred[i] - z_score * preds_std
+	upper_bounds[0] = y_pred[i] + z_score * preds_std
 
 	# Unscale confidence intervals
 	lower_bounds_unscaled[0] = lower_bounds[0] * index_stds.values + index_means.values

@@ -55,23 +55,24 @@ def get_future_dates(data):
 
 
 def check_if_new_data(data_path='data/temporal_data_seasonal_df.csv'):
-	"""
-	Prevents running data update if model is run during a dekad already in the data.
+    """
+    Prevents running data update if model is run during a dekad already in the data.
 
-	Parameters:
-		data_path: Path to temporal data from previous update.
-	"""
-	data = pd.read_csv(data_path, index_col=0)
-	today_date = datetime.today().strftime("%Y-%m-%d")
-	last_date = data.index[-1]
-	possible_dates = cleaning_utils.get_dates_of_interest(last_date)
-	missing_dates = cleaning_utils.get_dates_of_interest(last_date, today_date)[1:]
-	if datetime.strptime(missing_dates[-1], "%Y-%m-%d") < datetime.today():
-	  missing_dates = missing_dates[:-1]
+    Parameters:
+        data_path: Path to temporal data from previous update.
+    """
+    data = pd.read_csv(data_path, index_col=0)
+    today_date = datetime.today().strftime("%Y-%m-%d")
+    last_date = data.index[-1]
+    possible_dates = cleaning_utils.get_dates_of_interest(last_date)
+    missing_dates = cleaning_utils.get_dates_of_interest(last_date, today_date)[1:]
 
-	new_data = len(missing_dates) > 0
+    if len(missing_dates) > 0:
+        if datetime.strptime(missing_dates[-1], "%Y-%m-%d") < datetime.today():
+            missing_dates = missing_dates[:-1]
 
-	return new_data
+    new_data = len(missing_dates) > 0
+    return new_data
 
 
 def update_data():
@@ -123,10 +124,10 @@ def create_dataframe():
 	    kyoga,
 	    rainfall,
 	    teleconnections,
-	    inundation_temporal_scaled.rename({'percent_inundation': 'inundation_temporal'}, axis=1)[['percent_inundation']],
-	    gridded_rainfall_temporal.rename({'rainfall': 'rainfall_3d_temporal'}, axis=1)[['rainfall']],
-	    gridded_rainfall_cumulative_temporal.rename({'cumulative_rainfall': 'rainfall_cumulative'}, axis=1)[['cumulative_rainfall']],
-	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1)[['moisture']],
+	    inundation_temporal_scaled.rename({'percent_inundation': 'inundation_temporal'}, axis=1)[['inundation_temporal']],
+	    gridded_rainfall_temporal.rename({'rainfall': 'rainfall_3d_temporal'}, axis=1)[['rainfall_3d_temporal']],
+	    gridded_rainfall_cumulative_temporal.rename({'cumulative_rainfall': 'rainfall_cumulative'}, axis=1)[['rainfall_cumulative']],
+	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1)[['moisture_3d_temporal']],
 	    inundation_temporal_delta
 	], axis=1)
 	temporal_data_df = cleaning_utils.impute_missing_values(temporal_data_df, temporal_data_df.columns)
@@ -302,8 +303,8 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 	# Calculate confidence intervals using z-scores
 	confidence_level = 0.95
 	z_score = norm.ppf(1 - (1 - confidence_level) / 2)  # 1.96 for 95% CI
-	lower_bounds[0] = y_pred[i] - z_score * preds_std
-	upper_bounds[0] = y_pred[i] + z_score * preds_std
+	lower_bounds[0] = y_pred - z_score * preds_std
+	upper_bounds[0] = y_pred + z_score * preds_std
 
 	# Unscale confidence intervals
 	lower_bounds_unscaled[0] = lower_bounds[0] * index_stds.values + index_means.values

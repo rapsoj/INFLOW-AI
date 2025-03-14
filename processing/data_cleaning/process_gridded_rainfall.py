@@ -5,6 +5,9 @@ import glob
 # Import cleaning utils
 from .. import cleaning_utils
 
+# Import statistics
+from data.stats import gridded_data_stats
+
 # Import TAMSAT API
 from processing.data_cleaning.download_tamsat.tamsat_download_extract_api import download, extract
 
@@ -34,20 +37,15 @@ from tqdm import tqdm
 # Configure logging
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
-def read_stats(stats_file_path, temporal=False):
+    
+    
+def read_stats(region='all'):
     """
-    Read the rainfall statistics file.
-
-    Parameters:
-        stats_file_path (str): Path to rainfall statistics file.
+    Read the gridded data statistics file.
     """
-    with open(stats_file_path, 'r') as f:
-        lines = f.readlines()
-    # Extract mean and std from the file
-    rainfall_mean = float(lines[0 + temporal*2].split(': ')[1].strip())
-    rainfall_std = float(lines[1 + temporal*2].split(': ')[1].strip())
+    rainfall_mean = gridded_data_stats.gridded_rainfall_stats[region]['mean']
+    rainfall_std = gridded_data_stats.gridded_rainfall_stats[region]['std']
+    
     return rainfall_mean, rainfall_std
 
 
@@ -239,7 +237,7 @@ def group_dates_by_decade(dates):
         grouped_indices.append(current_indices)
 
     # Remove incomplete dekads
-    grouped_indices = [group for group in grouped_indices if len(group) > 8]
+    grouped_indices = [group for group in grouped_indices if len(group) >= 8]
     
     return date_groups, grouped_indices
 
@@ -335,15 +333,13 @@ def export_decadal_geotiffs(extract_folder, output_folder):
 
 def process_new_gridded_rainfall(rainfall_dekads_folder,
                                  sample_tif_folder='data/downloads/inundation_masks',
-                                 stats_file_path="data/stats/gridded_rainfall_stats.txt",
-                                 catchments_path="data/maps/INFLOW_cmts_15/INFLOW_all_cmts.shp"):
+                                 catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp"):
     """
     Process newly downloaded gridded rainfall data.
 
     Parameters:
         sample_tif_folder (str): Folder with sample inundation tif file for extracting boundaries.
         rainfall_dekads_folder (str): Folder with extracted rainfall dekads.
-        stats_file_path (str): Folder with saved summary statistics for historic gridded rainfall.
     """
     # List rainfall files and filter only the valid .tif files
     rainfall_dekads_files = [f for f in os.listdir(rainfall_dekads_folder) if f.endswith('.tif') and not f.endswith('(1).tif')]
@@ -438,7 +434,7 @@ def process_new_gridded_rainfall(rainfall_dekads_folder,
     gridded_rainfall_new = np.stack(rainfall_data_list, axis=0)
 
     # Standard scale new data based on saved values
-    rainfall_mean, rainfall_std = read_stats(stats_file_path)
+    rainfall_mean, rainfall_std = read_stats()
     gridded_rainfall_new = standardize_array(gridded_rainfall_new, rainfall_mean, rainfall_std)
     
     return gridded_rainfall_new, sorted_dates
@@ -449,7 +445,6 @@ def update_gridded_rainfall(
         download_path='data/downloads/tamsat/rfe/data/v3.1/daily',
         extract_folder='data/downloads/extracted_data/domain',
         dekads_path='data/downloads/tamsat/rfe/dekads',
-        stats_file_path="data/stats/gridded_rainfall_stats.txt",
         temporal_data_path='data/historic/gridded_rainfall_temporal.csv'):
     """
     Combine newly downloaded gridded rainfall with existing data.
@@ -459,7 +454,6 @@ def update_gridded_rainfall(
         download_path (str): Directory path to save downloaded TIF files.
         extract_folder (str): Directory folder to extracted TIF files.
         dekads_path (str): Directory path to export dekadal TIF files.
-        stats_file_path (str): Folder with saved summary statistics for historic gridded rainfall.
         temporal_data_path (str): Directory path to historic temporal data CSV.
     """
     try:
@@ -480,14 +474,35 @@ def update_gridded_rainfall(
             logging.info("No new files to process.")
             
         else:
+            # Crop area to regions of interest
+            regions_gdf = cleaning_utils.extract_regions()
+            
+            # Calculate total number of cells
+            total_cells = new_data[0].shape[0] * new_data[0].shape[1]
+            
+            # Create new temporal data
+            rainfall_temporal = pd.DataFrame({'rainfall': new_data.sum(axis=(1, 2))})
+            rainfall_temporal['date'] = new_dates
+            temporal_mean, temporal_std = read_stats(region='all_temporal')
+            rainfall_temporal['rainfall'] = (rainfall_temporal['rainfall'] - temporal_mean) / temporal_std
+            
+            # Loop through regions
+            for i in range(len(regions_gdf)):
+                region_data = regions_gdf.iloc[[i]]
+                region_code = gridded_data_stats.region_to_code_dict[region_data['region'].values[0]]
+                region_area = cleaning_utils.mask_regions(region_data, np.array(new_data))
+                
+                # Get stats for region
+                temporal_mean_region, temporal_std_region = read_stats(region=region_code)
+                rainfall_temporal[f"rainfall_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
+                rainfall_temporal[f"rainfall_{region_code}"] = (rainfall_temporal[f"rainfall_{region_code}"] - temporal_mean_region) / temporal_std_region
+                
             # Update temporal data
-            temporal_df = pd.DataFrame({'rainfall': new_data.sum(axis=(1, 2))})
-            temporal_df['date'] = new_dates
-            temporal_mean, temporal_std = read_stats(stats_file_path, temporal=True)
-            temporal_df['rainfall'] = (temporal_df['rainfall'] - temporal_mean) / temporal_std
-            temporal_historic = pd.read_csv(temporal_data_path)
-            temporal_updated = pd.concat([temporal_historic, temporal_df])
-            temporal_updated.to_csv(temporal_data_path, index=False)
+            rainfall_temporal_historic = pd.read_csv(temporal_data_path)
+            rainfall_temporal_new = pd.concat([rainfall_temporal_historic, rainfall_temporal])
+
+            # Save the updated temporal data
+            rainfall_temporal_new.to_csv(temporal_data_path, index=False)
     
             # Append new data to HDF5
             with h5py.File('data/historic/gridded_rainfall.h5', 'a') as hdf:

@@ -1,6 +1,12 @@
 # Import system libraries
 import os
 
+# Import cleaning utils
+from .. import cleaning_utils
+
+# Import statistics
+from data.stats import gridded_data_stats
+
 # Import data manipulation libraries
 import numpy as np
 import pandas as pd
@@ -14,19 +20,14 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def read_stats(stats_file_path, temporal=False):
+def read_stats(region='all'):
     """
-    Read the rainfall statistics file.
-
-    Parameters:
-        stats_file_path (str): Path to rainfall statistics file.
+    Read the gridded data statistics file.
     """
-    with open(stats_file_path, 'r') as f:
-        lines = f.readlines()
-    # Extract mean and std from the file
-    rainfall_mean = float(lines[0 + temporal*2].split(': ')[1].strip())
-    rainfall_std = float(lines[1 + temporal*2].split(': ')[1].strip())
-    return rainfall_mean, rainfall_std
+    rainfall_cumulative_mean = gridded_data_stats.gridded_rainfall_cumulative_stats[region]['mean']
+    rainfall_cumulative_std = gridded_data_stats.gridded_rainfall_cumulative_stats[region]['std']
+    
+    return rainfall_cumulative_mean, rainfall_cumulative_std
 
 
 def standardize_array(array, mean, std):
@@ -110,7 +111,9 @@ def load_new_gridded_rainfall_data(temporal_data_path='data/historic/gridded_rai
 	len_old = len(pd.read_csv(cum_temporal_data_path))
 	len_new = len(pd.read_csv(temporal_data_path))
 	new_rainfall_indices = len_new - len_old
-
+	if new_rainfall_indices <= 0:
+	    return None, None
+    
 	# Open the new gridded rainfall data
 	with h5py.File(data_path, 'r') as gridded_rainfall:
 	    # Access the dataset (replace 'your_dataset' with the actual dataset name)
@@ -131,9 +134,8 @@ def load_new_gridded_rainfall_data(temporal_data_path='data/historic/gridded_rai
 
 
 def update_gridded_rainfall_cumulative(
-		data_path='data/historic/gridded_rainfall_cumulative.h5',
-        temporal_data_path='data/historic/gridded_rainfall_cumulative_temporal.csv',
-        stats_file_path='data/stats/gridded_rainfall_cumulative_stats.txt'):
+    data_path='data/historic/gridded_rainfall_cumulative.h5',
+    temporal_data_path='data/historic/gridded_rainfall_cumulative_temporal.csv'):
     """
     Combine newly downloaded gridded rainfall with existing data.
 
@@ -149,12 +151,12 @@ def update_gridded_rainfall_cumulative(
         historic_dates = get_historic_dates()
         new_dates = get_new_dates()
         
-        if len(gridded_rainfall_new) == 0:
+        if gridded_rainfall_new == None:
             logging.info("No new files to process.")
             
         else:
             # Calculate cumulative values for new data using most recent past data array
-            cum_rainfall_mean, cum_rainfall_std = read_stats(stats_file_path)
+            cum_rainfall_mean, cum_rainfall_std = read_stats()
             rainfall_3d_array_cumulative_last_unstandardised = unstandardize_array(gridded_rainfall_cumulative_last, cum_rainfall_mean, cum_rainfall_std)
     
     		# Cumulative sum most recent values
@@ -163,14 +165,35 @@ def update_gridded_rainfall_cumulative(
     		# Standard scale new data based on saved values
             new_data = standardize_array(new_cumsum, cum_rainfall_mean, cum_rainfall_std)
             
+            # Crop area to regions of interest
+            regions_gdf = cleaning_utils.extract_regions()
+            
+            # Calculate total number of cells
+            total_cells = new_data[0].shape[0] * new_data[0].shape[1]
+            
+            # Create new temporal data
+            rainfall_cumulative_temporal = pd.DataFrame({'cumulative_rainfall': new_data.sum(axis=(1, 2))})
+            rainfall_cumulative_temporal['date'] = new_dates
+            temporal_mean, temporal_std = read_stats(region='all_temporal')
+            rainfall_cumulative_temporal['cumulative_rainfall'] = (rainfall_cumulative_temporal['cumulative_rainfall'] - temporal_mean) / temporal_std
+            
+            # Loop through regions
+            for i in range(len(regions_gdf)):
+                region_data = regions_gdf.iloc[[i]]
+                region_code = gridded_data_stats.region_to_code_dict[region_data['region'].values[0]]
+                region_area = cleaning_utils.mask_regions(region_data, np.array(new_data))
+                
+                # Get stats for region
+                temporal_mean_region, temporal_std_region = read_stats(region=region_code)
+                rainfall_cumulative_temporal[f"cumulative_rainfall_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
+                rainfall_cumulative_temporal[f"cumulative_rainfall_{region_code}"] = (rainfall_cumulative_temporal[f"cumulative_rainfall_{region_code}"] - temporal_mean_region) / temporal_std_region
+            
             # Update temporal data
-            temporal_df = pd.DataFrame({'cumulative_rainfall': new_data.sum(axis=(1, 2))})
-            temporal_df['date'] = new_dates
-            temporal_mean, temporal_std = read_stats(stats_file_path, temporal=True)
-            temporal_df['cumulative_rainfall'] = (temporal_df['cumulative_rainfall'] - temporal_mean) / temporal_std
-            temporal_historic = pd.read_csv(temporal_data_path)
-            temporal_updated = pd.concat([temporal_historic, temporal_df])
-            temporal_updated.to_csv(temporal_data_path, index=False)
+            rainfall_cumulative_temporal_historic = pd.read_csv(temporal_data_path)
+            rainfall_cumulative_temporal_new = pd.concat([rainfall_cumulative_temporal_historic, rainfall_cumulative_temporal])
+            
+            # Save the updated temporal data
+            rainfall_cumulative_temporal_new.to_csv(temporal_data_path, index=False)
     
             # Append new data to HDF5
             with h5py.File(data_path, 'a') as hdf:

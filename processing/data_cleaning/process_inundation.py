@@ -23,24 +23,22 @@ from tqdm import tqdm
 # Import cleaning utils
 from .. import cleaning_utils
 
+# Import statistics
+from data.stats import gridded_data_stats
+
 # Configure logging
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def read_stats(stats_file_path):
+def read_stats(region='all'):
     """
-    Read the rainfall statistics file.
-
-    Parameters:
-        stats_file_path (str): Path to rainfall statistics file.
+    Read the gridded data statistics file.
     """
-    with open(stats_file_path, 'r') as f:
-        lines = f.readlines()
-    # Extract mean and std from the file
-    rainfall_mean = float(lines[0].split(': ')[1].strip())
-    rainfall_std = float(lines[1].split(': ')[1].strip())
-    return rainfall_mean, rainfall_std
+    inundation_mean = gridded_data_stats.inundation_stats[region]['mean']
+    inundation_std = gridded_data_stats.inundation_stats[region]['std']
+    
+    return inundation_mean, inundation_std
     
 
 def download_inundation(dates_list, download_path='data/downloads/inundation_masks'):
@@ -208,13 +206,14 @@ def download_new_inundation(download_path='data/downloads/inundation_masks'):
 
 def update_inundation(download_path='data/downloads/inundation_masks',
                       temporal_data_path='data/historic/inundation_temporal_unscaled.csv',
-                      stats_file_path='data/stats/inundation_stats.txt'):
+                      temporal_data_path_scaled='data/historic/inundation_temporal_scaled.csv'):
     """
     Process newly downloaded inundation data and combine it with existing data.
 
     Parameters:
         download_path (str): Directory path to save downloaded TIF files.
         temporal_data_path (str): Directory path of pre-downloaded temporal data.
+        temporal_data_path_scaled (str): Directory path of pre-downloaded scaled temporal data.
     """
     try:
         with h5py.File('data/historic/inundation.h5', 'r') as f:
@@ -238,7 +237,7 @@ def update_inundation(download_path='data/downloads/inundation_masks',
             return
 
         # Process the new TIF files
-        catchments_path = "data/maps/INFLOW_cmts_15/INFLOW_all_cmts.shp"
+        catchments_path = "data/maps/inflow_catchments/INFLOW_all_cmts.shp"
         catchments = load_shapefile(catchments_path)
         first_raster_path = os.path.join(download_path, sorted_files[0])
         catchments = reproject_to_raster_crs(catchments, first_raster_path)
@@ -246,7 +245,10 @@ def update_inundation(download_path='data/downloads/inundation_masks',
         # Process rasters and gather new data
         new_clipped_tif_files, _, _ = process_and_clip_rasters(new_files, download_path, catchments)
         
-                # Calculate total number of cells
+        # Crop area to regions of interest
+        regions_gdf = cleaning_utils.extract_regions()
+        
+        # Calculate total number of cells
         total_cells = new_clipped_tif_files[0].shape[0] * new_clipped_tif_files[0].shape[1]
         
         # Create new temporal data
@@ -254,13 +256,27 @@ def update_inundation(download_path='data/downloads/inundation_masks',
         
         # Fix index creation by looping over new_files
         inundation_temporal['date'] = [datetime.strptime(file.split('.')[0], "%Y%m%d").date() for file in new_files]
+        inundation_temporal_scaled = inundation_temporal.copy()
+        temporal_mean, temporal_std = read_stats()
+        inundation_temporal_scaled['percent_inundation'] = (inundation_temporal_scaled['percent_inundation'] - temporal_mean) / temporal_std
         
+        # Loop through regions
+        for i in range(len(regions_gdf)):
+            region_data = regions_gdf.iloc[[i]]
+            region_code = gridded_data_stats.region_to_code_dict[region_data['region'].values[0]]
+            region_area = cleaning_utils.mask_regions(region_data, np.array(new_clipped_tif_files))
+            
+            # Get stats for region
+            temporal_mean_region, temporal_std_region = read_stats(region=region_code)
+            inundation_temporal[f"percent_inundation_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
+            scaled_region_temporal_data = (inundation_temporal[f'percent_inundation_{region_code}'] - temporal_mean_region) / temporal_std_region
+            inundation_temporal_scaled[f'percent_inundation_{region_code}'] = scaled_region_temporal_data
+            
         # Update temporal data
         inundation_temporal_historic = pd.read_csv(temporal_data_path)
+        inundation_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)
         inundation_temporal_new = pd.concat([inundation_temporal_historic, inundation_temporal])
-        temporal_mean, temporal_std = read_stats(stats_file_path)
-        inundation_temporal_new_scaled = inundation_temporal_new.copy()
-        inundation_temporal_new_scaled['percent_inundation'] = (inundation_temporal_new_scaled['percent_inundation'] - temporal_mean) / temporal_std
+        inundation_temporal_new_scaled = pd.concat([inundation_temporal_historic_scaled, inundation_temporal_scaled])
         
         # Save the updated temporal data
         inundation_temporal_new.to_csv('data/historic/inundation_temporal_unscaled.csv', index=False)

@@ -5,6 +5,9 @@ import glob
 # Import cleaning utils
 from .. import cleaning_utils
 
+# Import statistics
+from data.stats import gridded_data_stats
+
 # Import TAMSAT API
 from processing.data_cleaning.download_tamsat.tamsat_download_extract_api import download, extract
 
@@ -36,18 +39,13 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def read_stats(stats_file_path, temporal=False):
+def read_stats(region='all'):
     """
-    Read the moisture statistics file.
-
-    Parameters:
-        stats_file_path (str): Path to moisture statistics file.
+    Read the gridded data statistics file.
     """
-    with open(stats_file_path, 'r') as f:
-        lines = f.readlines()
-    # Extract mean and std from the file
-    moisture_mean = float(lines[0 + temporal*2].split(': ')[1].strip())
-    moisture_std = float(lines[1 + temporal*2].split(': ')[1].strip())
+    moisture_mean = gridded_data_stats.gridded_moisture_stats[region]['mean']
+    moisture_std = gridded_data_stats.gridded_moisture_stats[region]['std']
+    
     return moisture_mean, moisture_std
 
 
@@ -239,7 +237,7 @@ def group_dates_by_decade(dates):
         grouped_indices.append(current_indices)
 
     # Remove incomplete dekads
-    grouped_indices = [group for group in grouped_indices if len(group) > 8]
+    grouped_indices = [group for group in grouped_indices if len(group) >= 8]
     
     return date_groups, grouped_indices
 
@@ -336,15 +334,13 @@ def export_decadal_geotiffs(extract_folder, output_folder):
 
 def process_new_gridded_moisture(moisture_dekads_folder,
                                  sample_tif_folder='data/downloads/inundation_masks',
-                                 stats_file_path="data/stats/gridded_moisture_stats.txt",
-                                 catchments_path="data/maps/INFLOW_cmts_15/INFLOW_all_cmts.shp"):
+                                 catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp"):
     """
     Process newly downloaded gridded moisture data.
 
     Parameters:
         sample_tif_folder (str): Folder with sample inundation tif file for extracting boundaries.
         moisture_dekads_folder (str): Folder with extracted moisture dekads.
-        stats_file_path (str): Folder with saved summary statistics for historic gridded moisture.
     """
     # List moisture files and filter only the valid .tif files
     moisture_dekads_files = [f for f in os.listdir(moisture_dekads_folder) if f.endswith('.tif') and not f.endswith('(1).tif')]
@@ -439,7 +435,7 @@ def process_new_gridded_moisture(moisture_dekads_folder,
     gridded_moisture_new = np.stack(moisture_data_list, axis=0)
 
     # Standard scale new data based on saved values
-    moisture_mean, moisture_std = read_stats(stats_file_path)
+    moisture_mean, moisture_std = read_stats()
     gridded_moisture_new = standardize_array(gridded_moisture_new, moisture_mean, moisture_std)
     
     return gridded_moisture_new, sorted_dates
@@ -450,7 +446,6 @@ def update_gridded_moisture(
         download_path='data/downloads/tamsat/soil_moisture/data/v2.3.1/daily',
         extract_folder='data/downloads/extracted_data/domain',
         dekads_path='data/downloads/tamsat/soil_moisture/dekads',
-        stats_file_path="data/stats/gridded_moisture_stats.txt",
         temporal_data_path='data/historic/gridded_moisture_temporal.csv'):
     """
     Combine newly downloaded gridded moisture with existing data.
@@ -460,7 +455,6 @@ def update_gridded_moisture(
         download_path (str): Directory path to save downloaded TIF files.
         extract_folder (str): Directory folder to extracted TIF files.
         dekads_path (str): Directory path to export dekadal TIF files.
-        stats_file_path (str): Folder with saved summary statistics for historic gridded moisture.
         temporal_data_path (str): Directory path to historic temporal data CSV.
     """
     try:
@@ -481,14 +475,35 @@ def update_gridded_moisture(
             logging.info("No new files to process.")
             
         else:
+            # Crop area to regions of interest
+            regions_gdf = cleaning_utils.extract_regions()
+            
+            # Calculate total number of cells
+            total_cells = new_data[0].shape[0] * new_data[0].shape[1]
+            
+            # Create new temporal data
+            moisture_temporal = pd.DataFrame({'moisture': new_data.sum(axis=(1, 2))})
+            moisture_temporal['date'] = new_dates
+            temporal_mean, temporal_std = read_stats(region='all_temporal')
+            moisture_temporal['moisture'] = (moisture_temporal['moisture'] - temporal_mean) / temporal_std
+            
+            # Loop through regions
+            for i in range(len(regions_gdf)):
+                region_data = regions_gdf.iloc[[i]]
+                region_code = gridded_data_stats.region_to_code_dict[region_data['region'].values[0]]
+                region_area = cleaning_utils.mask_regions(region_data, np.array(new_data))
+                
+                # Get stats for region
+                temporal_mean_region, temporal_std_region = read_stats(region=region_code)
+                moisture_temporal[f"moisture_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
+                moisture_temporal[f"moisture_{region_code}"] = (moisture_temporal[f"moisture_{region_code}"] - temporal_mean_region) / temporal_std_region
+                
             # Update temporal data
-            temporal_df = pd.DataFrame({'moisture': new_data.sum(axis=(1, 2))})
-            temporal_df['date'] = new_dates
-            temporal_mean, temporal_std = read_stats(stats_file_path, temporal=True)
-            temporal_df['moisture'] = (temporal_df['moisture'] - temporal_mean) / temporal_std
-            temporal_historic = pd.read_csv(temporal_data_path)
-            temporal_updated = pd.concat([temporal_historic, temporal_df])
-            temporal_updated.to_csv(temporal_data_path, index=False)
+            moisture_temporal_historic = pd.read_csv(temporal_data_path)
+            moisture_temporal_new = pd.concat([moisture_temporal_historic, moisture_temporal])
+            
+            # Save the updated temporal data
+            moisture_temporal_new.to_csv(temporal_data_path, index=False)
     
             # Append new data to HDF5
             with h5py.File('data/historic/gridded_moisture.h5', 'a') as hdf:

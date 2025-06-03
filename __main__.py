@@ -18,7 +18,7 @@ from processing.data_cleaning import process_gridded_moisture
 # Import data manipulation libraries
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 # Import statistical libraries
 from scipy.stats import norm
@@ -29,6 +29,8 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.ensemble import RandomForestRegressor
+import joblib
 
 # Import data visualisation libraries
 import matplotlib.pyplot as plt
@@ -130,7 +132,7 @@ def create_dataframe():
 	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1)[['moisture_3d_temporal']],
 	    inundation_temporal_delta
 	], axis=1)
-	temporal_data_df = cleaning_utils.impute_missing_values(temporal_data_df, temporal_data_df.columns)
+	temporal_data_df = cleaning_utils.impute_missing_values(temporal_data_df, temporal_data_df.drop(columns=['inundation_temporal', 'inundation_delta']).columns)
 
 	# Create month-day index and load saved seasonal statistics for scaling
 	temporal_data_df['month_day'] = pd.to_datetime(temporal_data_df.index).strftime('%m-%d')
@@ -163,7 +165,7 @@ def create_dataframe():
 	    temporal_data_seasonal_df[column] = normalized_values
 
 	# Drop month-day column
-	temporal_data_seasonal_df = temporal_data_seasonal_df.drop('month_day', axis=1)
+	temporal_data_seasonal_df = temporal_data_seasonal_df.drop('month_day', axis=1).dropna()
 	temporal_data_seasonal_df.to_csv('data/temporal_data_seasonal_df.csv')
 
 	return temporal_data_seasonal_df
@@ -192,7 +194,7 @@ def custom_loss(y_true, y_pred):
     return total_loss
 
 
-def predict_new_inundation(data, model_path='model/temporal_model.keras', custom_loss_function=custom_loss):
+def predict_new_inundation_transformer(data, model_path='model/temporal_model.keras', custom_loss_function=custom_loss):
 	"""
 	Predict new inundation based on updated data.
 
@@ -212,6 +214,42 @@ def predict_new_inundation(data, model_path='model/temporal_model.keras', custom
 	logging.info(f"New inundation predicted.")
 
 	return y_pred, X_pred_reshaped, model_delta
+	
+	
+def predict_new_inundation_rf(data, model_path='model/temporal_model.pkl', pca_path='model/pca_model.pkl'):
+	"""
+	Predict new inundation based on updated data.
+
+	Parameters:
+		data (df): Dataframe with fully updated temporal data.
+		model_path (str): Path to pre-trained temporal model.
+	"""
+	# Select data for prediction
+	X_pred = data.iloc[-36:,:-1].values
+	pca = joblib.load(pca_path)
+	X_pred_pca = pca.transform(X_pred)
+	X_pred_pca_expanded = np.expand_dims(X_pred_pca, axis=0)
+	X_pred_flat = X_pred_pca_expanded.reshape(X_pred_pca_expanded.shape[0], -1)
+
+	# Load model and custom loss function
+	model_delta = joblib.load(model_path)
+	y_pred = model_delta.predict(X_pred_flat)
+	
+	# Calculate the mean and standard deviation of predictions from all trees
+	tree_preds = np.array([tree.predict(X_pred_flat) for tree in model_delta.estimators_])
+	y_pred_std = np.std(tree_preds, axis=0)
+	
+	# Calculate confidence intervals (95% CI)
+	ci_lower = y_pred - 1.96 * y_pred_std
+	ci_upper = y_pred + 1.96 * y_pred_std
+	
+	# Reshape ci_lower and ci_upper to match y_pred shape (543, 6)
+	ci_lower = ci_lower.reshape(-1, 6)
+	ci_upper = ci_upper.reshape(-1, 6)
+	
+	logging.info(f"New inundation predicted.")
+	
+	return y_pred, X_pred_flat, model_delta, ci_lower, ci_upper
 
 
 def monte_carlo_predictions(model, X, num_samples=100):
@@ -248,7 +286,7 @@ def monte_carlo_predictions(model, X, num_samples=100):
     return preds_mean, preds_std
 
 
-def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
+def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_carlo=True, lower_bounds=None, upper_bounds=None):
 	"""
 	Convert predictions back from seasonal deltas to unscaled inundation percentages.
 
@@ -258,6 +296,7 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 		X_pred (array): Data from past 36 dekads.
 		future_dates (list): List of dates for prediction in format 'YYYY-MM-DD'
 		model_delta (model): Keras model trained on full temporal dataset.
+		monte_carlo (boolean): Whether Monte Carlo simulations are necessary to produce confidence intervals, if False, must provide values for upper and lower bounds.
 	"""
 	# Load unscaled temporal inundation data
 	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date').reindex(data.index)
@@ -270,8 +309,6 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 	# Intialise arrays to store unscaled values
 	y_pred_unscaled = np.zeros(y_pred.shape)
 	inundation_pred = np.zeros(y_pred.shape)
-	lower_bounds = np.zeros(y_pred.shape)
-	upper_bounds = np.zeros(y_pred.shape)
 	lower_bounds_unscaled = np.zeros(y_pred.shape)
 	upper_bounds_unscaled = np.zeros(y_pred.shape)
 	lower_bound_unscaled_inundation = np.zeros(y_pred.shape)
@@ -290,21 +327,26 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 
 	# Unscale predictions
 	y_pred_unscaled[0] = y_pred[0] * index_stds.values + index_means.values
-
-	# Perform Monte Carlo sampling with drop out
-	num_samples = 1000  # Number of MC dropout samples
-	preds_mean, preds_std = monte_carlo_predictions(model_delta, X_pred, num_samples=num_samples)
-	preds_mean_unscaled = y_pred[0] * index_stds.values + index_means.values
-
-	# Perform confidence correction
-	confidence_correction = 1
-	preds_std = preds_std * confidence_correction
-
-	# Calculate confidence intervals using z-scores
-	confidence_level = 0.95
-	z_score = norm.ppf(1 - (1 - confidence_level) / 2)  # 1.96 for 95% CI
-	lower_bounds[0] = y_pred - z_score * preds_std
-	upper_bounds[0] = y_pred + z_score * preds_std
+	   
+	if monte_carlo:
+	    # Intialise arrays to store unscaled values
+	    lower_bounds = np.zeros(y_pred.shape)
+	    upper_bounds = np.zeros(y_pred.shape)
+	    
+	    # Perform Monte Carlo sampling with drop out
+	    num_samples = 1000  # Number of MC dropout samples
+	    preds_mean, preds_std = monte_carlo_predictions(model_delta, X_pred, num_samples=num_samples)
+	    preds_mean_unscaled = y_pred[0] * index_stds.values + index_means.values
+	    
+	    # Perform confidence correction
+	    confidence_correction = 1
+	    preds_std = preds_std * confidence_correction
+	    
+	    # Calculate confidence intervals using z-scores
+	    confidence_level = 0.95
+	    z_score = norm.ppf(1 - (1 - confidence_level) / 2)  # 1.96 for 95% CI
+	    lower_bounds[0] = y_pred - z_score * preds_std
+	    upper_bounds[0] = y_pred + z_score * preds_std
 
 	# Unscale confidence intervals
 	lower_bounds_unscaled[0] = lower_bounds[0] * index_stds.values + index_means.values
@@ -318,9 +360,47 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta):
 	    inundation_pred[0][j] = inundation_pred[0][j - 1] + y_pred_unscaled[0][j]
 	    lower_bound_unscaled_inundation[0][j] = lower_bound_unscaled_inundation[0][j - 1] + lower_bounds_unscaled[0][j]
 	    upper_bound_unscaled_inundation[0][j] = upper_bound_unscaled_inundation[0][j - 1] + upper_bounds_unscaled[0][j]
-
+	    
+	# Remove predictions below zero
+	lower_bound_unscaled_inundation[lower_bound_unscaled_inundation < 0] = 0
+	upper_bound_unscaled_inundation[upper_bound_unscaled_inundation < 0] = 0
+	inundation_pred[inundation_pred < 0] = 0
 
 	return inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation, inundation_temporal_unscaled
+	
+	
+def print_trigger(inundation_pred, future_dates):
+    """
+    Print text file with trigger message if trigger is activated.
+    """
+    # Set threshold
+    threshold_delta = 0.05
+    
+    # Define the folder path
+    folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
+    
+    # Format predictions data
+    inundation_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')[['percent_inundation']]
+    
+    # Export S-EAP trigger if activated 
+    pred_max = np.max(inundation_pred[:, :], axis=1)
+    season_min = inundation_unscaled['percent_inundation'].rolling(window=18, min_periods=1).min().iloc[-1]
+    if pred_max - season_min > threshold_delta:
+        
+        # Write the message to a file
+        today_date = today = date.today().strftime("%Y-%m-%d")
+        trigger_date = future_dates[np.argmax(inundation_pred[:, :])]
+        pred_delta = np.round((pred_max - season_min) * 100, 1)[0]
+        pred_max_round = np.round(pred_max * 100, 1)[0]
+        season_min_round = np.round(season_min * 100, 1)
+        message = (
+        f"Alert triggered on {today_date}. "
+        f"Flood extent predicted to cover {pred_max_round}% of South Sudan by {trigger_date}. "
+        f"This is an increase of {pred_delta}% of the total area of the country that is inundated "
+        f"since the seasonal flood extent minimum of {season_min_round}%, passing the seasonal inundation extent change threshold of 5.0% set out in the S-EAP."
+        )
+        with open(f"{folder_path}/TRIGGER ACTIVATED.txt", "w") as file:
+            file.write(message)
 
 
 def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation, future_dates):
@@ -329,11 +409,13 @@ def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_uns
 	"""
     # Create predictions dataframe
 	predictions = pd.DataFrame({'lower_bound_95': lower_bound_unscaled_inundation[0],
-	                            'percent_inundation_prediction': inundation_pred[0],
+	                            'percent_inundation': inundation_pred[0],
 	                            'upper_bound_95': upper_bound_unscaled_inundation[0]}, index=future_dates)
+	inundation_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')[['percent_inundation']]
+	predictions = pd.concat([inundation_unscaled, predictions])
 	 
 	# Define the folder path
-	folder_path = f"predictions/inundation_predictions_{predictions.index[0]}_to_{predictions.index[-1]}"
+	folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
 	
 	# Create the folder if it doesn't exist
 	if not os.path.exists(folder_path):
@@ -343,7 +425,7 @@ def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_uns
 	    print(f"Folder already exists: {folder_path}")
     
     # Export predictions as CSV
-	predictions.to_csv(f'{folder_path}/{predictions.index[0]}_to_{predictions.index[-1]}.csv')
+	predictions.to_csv(f'{folder_path}/{future_dates[0]}_to_{future_dates[-1]}.csv')
 
 
 def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inundation,
@@ -471,10 +553,13 @@ def main():
 	    update_data()
 	    data = create_dataframe()
 	    future_dates = get_future_dates(data)
-	    y_pred, X_pred, model_delta = predict_new_inundation(data)
+	    # y_pred, X_pred, model_delta, ci_lower, ci_upper = predict_new_inundation_rf(data)
+	    # inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_carlo=False, lower_bounds=ci_lower, upper_bounds=ci_upper)
+	    y_pred, X_pred, model_delta = predict_new_inundation_transformer(data)
 	    inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta)
 	    export_csv(inundation_pred, lb_pred, ub_pred, future_dates)
 	    export_graphs(data, future_dates, inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled)
+	    print_trigger(inundation_pred, future_dates)
 
 	    logging.info(f"Predictions exported.")
 

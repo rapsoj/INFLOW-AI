@@ -21,6 +21,16 @@ from tqdm import tqdm
 temporal_data_seasonal_df = pd.read_csv('data/temporal_data_seasonal_df.csv', index_col=0)
 temporal_data_seasonal_df = temporal_data_seasonal_df.iloc[:804]
 
+# Load inundation data
+inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col=0)
+inundation_temporal_unscaled.index = pd.to_datetime(inundation_temporal_unscaled.index)
+
+# Load model data
+temporal_data_seasonal_df = pd.read_csv('data/temporal_data_seasonal_df.csv', index_col=0)
+means = pd.read_csv('data/stats/seasonal_means.csv', index_col='month_day')
+stds = pd.read_csv('data/stats/seasonal_stds.csv', index_col='month_day')
+
+
 # Positional encoding function
 def get_positional_encoding(seq_len, d_model):
     position = np.arange(seq_len)[:, np.newaxis]
@@ -200,8 +210,8 @@ for i in tqdm(range(len(indices_test))):
   # Calculate confidence intervals using z-scores
   confidence_level = 0.95
   z_score = norm.ppf(1 - (1 - confidence_level) / 2)  # 1.96 for 95% CI
-  lower_bounds[i] = preds_mean - z_score * preds_std
-  upper_bounds[i] = preds_mean + z_score * preds_std
+  lower_bounds[i] = y_pred[i] - z_score * preds_std
+  upper_bounds[i] = y_pred[i] + z_score * preds_std
 
   # Unscale confidence intervals
   lower_bounds_unscaled[i] = lower_bounds[i] * index_stds.values + index_means.values

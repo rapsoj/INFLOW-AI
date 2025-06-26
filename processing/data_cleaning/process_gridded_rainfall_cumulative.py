@@ -151,7 +151,7 @@ def update_gridded_rainfall_cumulative(
         historic_dates = get_historic_dates()
         new_dates = get_new_dates()
         
-        if gridded_rainfall_new == None:
+        if gridded_rainfall_new is None:
             logging.info("No new files to process.")
             
         else:

@@ -20,7 +20,7 @@ FOLDER_PATH = os.path.join(DATA_ROOT, 'data/downloads/teleconnections') # Modify
 
 
 def download_mjo(
-    skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = True,
+    skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = False,
 ):
     """Download Madden-Julian Oscillation indices."""
     logger.info("Downloading MJO data...")

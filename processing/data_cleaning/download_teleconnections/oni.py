@@ -16,7 +16,7 @@ DATA_ROOT = Path(os.getcwd()) # Modify as needed
 FOLDER_PATH = os.path.join(DATA_ROOT, 'data/downloads/teleconnections') # Modify as needed
 
 def download_oni(
-    skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = True,
+    skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = False,
 ):
     """Download Oceanic Nino Index data."""
     logger.info("Downloading ONI data...")

@@ -22,7 +22,7 @@ MONTH_TO_NUM_UP = {
     'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12}
 
 def download_soi(
-    skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = True,
+    skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = False,
 ):
     """Download Southern Oscillation Index data."""
     logger.info("Downloading SOI data...")

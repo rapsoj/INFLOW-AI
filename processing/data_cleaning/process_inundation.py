@@ -271,16 +271,6 @@ def update_inundation(download_path='data/downloads/inundation_masks',
             inundation_temporal[f"percent_inundation_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
             scaled_region_temporal_data = (inundation_temporal[f'percent_inundation_{region_code}'] - temporal_mean_region) / temporal_std_region
             inundation_temporal_scaled[f'percent_inundation_{region_code}'] = scaled_region_temporal_data
-            
-        # Update temporal data
-        inundation_temporal_historic = pd.read_csv(temporal_data_path)
-        inundation_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)
-        inundation_temporal_new = pd.concat([inundation_temporal_historic, inundation_temporal])
-        inundation_temporal_new_scaled = pd.concat([inundation_temporal_historic_scaled, inundation_temporal_scaled])
-        
-        # Save the updated temporal data
-        inundation_temporal_new.to_csv('data/historic/inundation_temporal_unscaled.csv', index=False)
-        inundation_temporal_new_scaled.to_csv('data/historic/inundation_temporal_scaled.csv', index=False)
 
         # Combine existing and new inundation data
         with h5py.File('data/historic/inundation.h5', 'a') as hdf:
@@ -288,6 +278,17 @@ def update_inundation(download_path='data/downloads/inundation_masks',
             dset.resize(dset.shape[0] + len(new_clipped_tif_files), axis=0)
             dset[-len(new_clipped_tif_files):] = new_clipped_tif_files
             logging.info(f"Updated inundation data shape: {dset.shape}")
+            new_dataset_length = dset.shape[0]
+            
+        # Update temporal data
+        inundation_temporal_historic = pd.read_csv(temporal_data_path)[:dset.shape[0]] # Crop to length of spatial data
+        inundation_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)[:new_dataset_length] # Crop to length of spatial data
+        inundation_temporal_new = pd.concat([inundation_temporal_historic, inundation_temporal])
+        inundation_temporal_new_scaled = pd.concat([inundation_temporal_historic_scaled, inundation_temporal_scaled])
+        
+        # Save the updated temporal data
+        inundation_temporal_new.to_csv('data/historic/inundation_temporal_unscaled.csv', index=False)
+        inundation_temporal_new_scaled.to_csv('data/historic/inundation_temporal_scaled.csv', index=False)
             
     except Exception as e:
         logging.error(f"Error processing new inundation data: {e}")

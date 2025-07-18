@@ -497,13 +497,6 @@ def update_gridded_moisture(
                 temporal_mean_region, temporal_std_region = read_stats(region=region_code)
                 moisture_temporal[f"moisture_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
                 moisture_temporal[f"moisture_{region_code}"] = (moisture_temporal[f"moisture_{region_code}"] - temporal_mean_region) / temporal_std_region
-                
-            # Update temporal data
-            moisture_temporal_historic = pd.read_csv(temporal_data_path)
-            moisture_temporal_new = pd.concat([moisture_temporal_historic, moisture_temporal])
-            
-            # Save the updated temporal data
-            moisture_temporal_new.to_csv(temporal_data_path, index=False)
     
             # Append new data to HDF5
             with h5py.File('data/historic/gridded_moisture.h5', 'a') as hdf:
@@ -511,6 +504,14 @@ def update_gridded_moisture(
                 dset.resize(dset.shape[0] + new_data.shape[0], axis=0)
                 dset[-new_data.shape[0]:] = new_data
                 logging.info(f"Updated moisture dataset shape: {dset.shape}")
-
+                new_dataset_length = dset.shape[0]
+                
+            # Update temporal data
+            moisture_temporal_historic = pd.read_csv(temporal_data_path)[:new_dataset_length] # Crop to length of spatial data
+            moisture_temporal_new = pd.concat([moisture_temporal_historic, moisture_temporal])
+            
+            # Save the updated temporal data
+            moisture_temporal_new.to_csv(temporal_data_path, index=False)
+            
     except Exception as e:
         logging.error(f"Error processing moisture data: {e}")

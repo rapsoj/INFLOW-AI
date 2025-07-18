@@ -187,13 +187,6 @@ def update_gridded_rainfall_cumulative(
                 temporal_mean_region, temporal_std_region = read_stats(region=region_code)
                 rainfall_cumulative_temporal[f"cumulative_rainfall_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
                 rainfall_cumulative_temporal[f"cumulative_rainfall_{region_code}"] = (rainfall_cumulative_temporal[f"cumulative_rainfall_{region_code}"] - temporal_mean_region) / temporal_std_region
-            
-            # Update temporal data
-            rainfall_cumulative_temporal_historic = pd.read_csv(temporal_data_path)
-            rainfall_cumulative_temporal_new = pd.concat([rainfall_cumulative_temporal_historic, rainfall_cumulative_temporal])
-            
-            # Save the updated temporal data
-            rainfall_cumulative_temporal_new.to_csv(temporal_data_path, index=False)
     
             # Append new data to HDF5
             with h5py.File(data_path, 'a') as hdf:
@@ -201,6 +194,14 @@ def update_gridded_rainfall_cumulative(
                 dset.resize(dset.shape[0] + new_data.shape[0], axis=0)
                 dset[-new_data.shape[0]:] = new_data
                 logging.info(f"Updated cumulative rainfall dataset shape: {dset.shape}")
+                new_dataset_length = dset.shape[0]
+            
+            # Update temporal data
+            rainfall_cumulative_temporal_historic = pd.read_csv(temporal_data_path)[:new_dataset_length] # Crop to length of spatial data
+            rainfall_cumulative_temporal_new = pd.concat([rainfall_cumulative_temporal_historic, rainfall_cumulative_temporal])
+            
+            # Save the updated temporal data
+            rainfall_cumulative_temporal_new.to_csv(temporal_data_path, index=False)
 
     except Exception as e:
         logging.error(f"Error processing cumulative rainfall data: {e}")

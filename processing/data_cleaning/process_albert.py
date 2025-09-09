@@ -167,33 +167,39 @@ def interpolate_missing(albert):
 def update_albert():
     """
     Main function to process Lake Albert data from download to final output.
+    Handles errors gracefully so failures won't crash the entire program.
     """
-    # Define bounding box for Lake Albert
-    bounding_box = [30.5, 1.5, 31.5, 2.5]
-    output_file_path = "data/downloads/lake_levels/Albert.txt"
+    try:
+        # Define bounding box for Lake Albert
+        bounding_box = [30.5, 1.5, 31.5, 2.5]
+        output_file_path = "data/downloads/lake_levels/Albert.txt"
 
-    # Download and extract data
-    file_path = download_and_extract_data(bounding_box, output_file_path)
+        # Download and extract data
+        file_path = download_and_extract_data(bounding_box, output_file_path)
 
-    # Load and preprocess data
-    albert = load_and_preprocess_data(file_path)
+        # Load and preprocess data
+        albert = load_and_preprocess_data(file_path)
 
-    # Align data with the specified dates
-    dates_list = cleaning_utils.get_dates_of_interest()
-    dates_list = pd.to_datetime(dates_list).sort_values()
-    albert = align_with_dates(albert, dates_list)
+        # Align data with the specified dates
+        dates_list = cleaning_utils.get_dates_of_interest()
+        dates_list = pd.to_datetime(dates_list).sort_values()
+        albert = align_with_dates(albert, dates_list)
 
-    # Impute missing values
-    albert = interpolate_missing(albert)
-    albert = cleaning_utils.impute_missing_values(albert, ['albert_water_level'])
+        # Impute missing values
+        albert = interpolate_missing(albert)
+        albert = cleaning_utils.impute_missing_values(albert, ['albert_water_level'])
+        
+        # Filter to study period
+        min_date = pd.to_datetime('2002-07-01')
+        albert = albert[albert.index >= min_date]
+        
+        # Scale the data
+        albert = scale_data(albert)
+
+        # Save processed data
+        albert.to_csv('data/historic/albert.csv', index=True)
+        print("Lake Albert data processing completed successfully.")
     
-    # Filter to study period
-    min_date = pd.to_datetime('2002-07-01')
-    albert = albert[albert.index >= min_date]
-    
-    # Scale the data
-    albert = scale_data(albert)
-
-    # Save processed data
-    albert.to_csv('data/historic/albert.csv', index=True)
-    print("Lake Albert data processing completed successfully.")
+    except Exception as e:
+        # Log the error but don’t raise it
+        print(f"⚠️ Lake Albert data update failed: {e}")

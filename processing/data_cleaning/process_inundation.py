@@ -49,7 +49,7 @@ def download_inundation(dates_list, download_path='data/downloads/inundation_mas
         dates_list (list): List of dates for which to download inundation data.
         download_path (str): Directory path to save downloaded TIF files.
     """
-    base_url = "https://data.earthobservation.vam.wfp.org/public-share/sudd_dashboard/ssdmask/ssdmask"
+    base_url = "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask"
     if not os.path.exists(download_path):
         os.makedirs(download_path)
 
@@ -281,7 +281,7 @@ def update_inundation(download_path='data/downloads/inundation_masks',
             new_dataset_length = dset.shape[0]
             
         # Update temporal data
-        inundation_temporal_historic = pd.read_csv(temporal_data_path)[:dset.shape[0]] # Crop to length of spatial data
+        inundation_temporal_historic = pd.read_csv(temporal_data_path)[:new_dataset_length] # Crop to length of spatial data
         inundation_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)[:new_dataset_length] # Crop to length of spatial data
         inundation_temporal_new = pd.concat([inundation_temporal_historic, inundation_temporal])
         inundation_temporal_new_scaled = pd.concat([inundation_temporal_historic_scaled, inundation_temporal_scaled])

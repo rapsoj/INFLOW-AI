@@ -49,7 +49,7 @@ def download_inundation(dates_list, download_path='data/downloads/inundation_mas
         dates_list (list): List of dates for which to download inundation data.
         download_path (str): Directory path to save downloaded TIF files.
     """
-    base_url = "https://data.earthobservation.vam.wfp.org/public-share/sudd_dashboard/ssdmask/ssdmask"
+    base_url = "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask"
     if not os.path.exists(download_path):
         os.makedirs(download_path)
 

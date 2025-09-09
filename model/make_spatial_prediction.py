@@ -20,6 +20,7 @@ from rasterio.transform import from_origin
 from rasterio.enums import Resampling as ResampleEnums
 from shapely.geometry import Point, MultiPolygon
 from matplotlib.patches import PathPatch
+from pathlib import Path as FilePath
 from matplotlib.path import Path as MplPath
 from matplotlib.lines import Line2D
 import zipfile
@@ -310,7 +311,6 @@ def polygon_to_path_patch(polygon, hatch='///', **kwargs):
         for poly in polygon.geoms:
             patches.append(polygon_to_path_patch(poly, hatch=hatch, **kwargs))
         return patches
-    from matplotlib.path import Path
 
     # Extract exterior and interior coordinates
     vertices = []
@@ -319,21 +319,21 @@ def polygon_to_path_patch(polygon, hatch='///', **kwargs):
     # Exterior
     x, y = polygon.exterior.coords.xy
     verts = np.column_stack([x, y])
-    codes = [Path.MOVETO] + [Path.LINETO] * (len(verts) - 2) + [Path.CLOSEPOLY]
+    codes = [MplPath.MOVETO] + [MplPath.LINETO] * (len(verts) - 2) + [MplPath.CLOSEPOLY]
     vertices.extend(verts.tolist())
 
     # Interiors (holes)
     for interior in polygon.interiors:
         x, y = interior.coords.xy
         verts = np.column_stack([x, y])
-        codes += [Path.MOVETO] + [Path.LINETO] * (len(verts) - 2) + [Path.CLOSEPOLY]
+        codes += [MplPath.MOVETO] + [MplPath.LINETO] * (len(verts) - 2) + [MplPath.CLOSEPOLY]
         vertices.extend(verts.tolist())
 
-    path = Path(vertices, codes)
+    path = MplPath(vertices, codes)
     return PathPatch(path, facecolor='none', edgecolor='black', hatch=hatch, lw=0.0, alpha=0.4, **kwargs)
 
 
-def align_mask(mask_array, src_transform, src_crs):
+def align_mask(mask_array, src_transform, src_crs, metas, inundation_file):
     aligned = np.zeros((
         metas[inundation_file]["height"],
         metas[inundation_file]["width"]
@@ -356,10 +356,10 @@ def plot_flood_change_map(
     title="Flood Change Map", region_name=None):
 
     # --- Align all masks ---
-    current = align_mask((current_extent > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'])
-    worst = align_mask((masks["Worst Case"] > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'])
-    avg = align_mask((masks["Average Case"] > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'])
-    best = align_mask((masks["Best Case"] > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'])
+    current = align_mask((current_extent > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'], metas, inundation_file)
+    worst = align_mask((masks["Worst Case"] > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'], metas, inundation_file)
+    avg = align_mask((masks["Average Case"] > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'], metas, inundation_file)
+    best = align_mask((masks["Best Case"] > 0).astype(np.uint8), metas[inundation_file]["transform"], metas[inundation_file]['crs'], metas, inundation_file)
 
     # Use the transform from clipped raster metadata (not src!)
     out_meta = metas[inundation_file].copy()
@@ -680,9 +680,9 @@ def export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder
   
     from tempfile import TemporaryDirectory
 
-    zip_path = Path(f"predictions/{folder_title}/spatial_predictions/flood_prediction_spatial_data.zip")
+    zip_path = FilePath(f"predictions/{folder_title}/spatial_predictions/flood_prediction_spatial_data.zip")
     with TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
+        temp_path = FilePath(temp_dir)
 
         transform = metas[inundation_file]["transform"]
         crs = metas[inundation_file]["crs"]
@@ -691,28 +691,28 @@ def export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder
         export_raster(
             align_mask((masks["Worst Case"] > 0).astype(np.uint8),
                       metas[inundation_file]["transform"],
-                      metas[inundation_file]["crs"]),
+                      metas[inundation_file]["crs"], metas, inundation_file),
             temp_path / "flood_scenario_worst.tif", transform, crs
         )
 
         export_raster(
             align_mask((masks["Average Case"] > 0).astype(np.uint8),
                       metas[inundation_file]["transform"],
-                      metas[inundation_file]["crs"]),
+                      metas[inundation_file]["crs"], metas, inundation_file),
             temp_path / "flood_scenario_average.tif", transform, crs
         )
 
         export_raster(
             align_mask((masks["Best Case"] > 0).astype(np.uint8),
                       metas[inundation_file]["transform"],
-                      metas[inundation_file]["crs"]),
+                      metas[inundation_file]["crs"], metas, inundation_file),
             temp_path / "flood_scenario_best.tif", transform, crs
         )
 
         export_raster(
             align_mask((current_extent > 0).astype(np.uint8),
                       metas[inundation_file]["transform"],
-                      metas[inundation_file]["crs"]),
+                      metas[inundation_file]["crs"], metas, inundation_file),
             temp_path / "current_extent.tif", transform, crs
         )
 
@@ -801,8 +801,7 @@ def run_full_spatial_analysis():
         [inundation_file], download_path, catchments)
 
     # Create output directory
-    from pathlib import Path
-    output_dir = Path(f"predictions/{folder_title}/spatial_predictions")
+    output_dir = FilePath(f"predictions/{folder_title}/spatial_predictions")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Plot full country

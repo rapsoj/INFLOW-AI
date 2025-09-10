@@ -758,7 +758,7 @@ def run_full_spatial_analysis():
     pred_df, folder_title = load_latest_prediction_csv()
 
     # Determine example time index
-    assert sorted(maps.keys())[-1] + 13 == len(pred_df), "Mismatch in prediction timeline"
+    assert sorted(maps.keys())[-1] + 13 == len(pred_df), f"Mismatch in prediction timeline with historic data = {sorted(maps.keys())[-1] + 13} and prediction data = {len(pred_df})"
     example_t = sorted(maps.keys())[-1]
 
     # Extract flood thresholds

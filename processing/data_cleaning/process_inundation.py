@@ -69,6 +69,7 @@ def download_inundation(dates_list, download_path='data/downloads/inundation_mas
         except Exception as e:
             print(f"Error occurred while downloading {file_name}: {e}")
 
+
 def get_sorted_tif_files(folder_path):
     """
     Get a sorted list of TIF files in a specified folder.
@@ -87,6 +88,7 @@ def get_sorted_tif_files(folder_path):
         logging.error(f"Folder not found: {folder_path}")
         return []
 
+
 def load_shapefile(path):
     """
     Load a shapefile as a GeoDataFrame.
@@ -102,6 +104,7 @@ def load_shapefile(path):
     except FileNotFoundError:
         logging.error(f"Shapefile not found: {path}")
         return None
+
 
 def reproject_to_raster_crs(shapefile, raster_path):
     """
@@ -120,6 +123,7 @@ def reproject_to_raster_crs(shapefile, raster_path):
     except Exception as e:
         logging.error(f"Error in reprojecting shapefile: {e}")
         return None
+
 
 def process_and_clip_rasters(tif_files, folder_path, catchments):
     """
@@ -166,6 +170,7 @@ def process_and_clip_rasters(tif_files, folder_path, catchments):
 
     return clipped_tif_files, tif_file_names, spatial_metadata
 
+
 def get_historic_dates(data_path='data/historic/inundation_temporal_unscaled.csv'):
     """
     Get list of historic dates from pre-downloaded data.
@@ -181,25 +186,37 @@ def get_historic_dates(data_path='data/historic/inundation_temporal_unscaled.csv
         logging.error(f"File not found: {data_path}")
         return []
 
-def download_new_inundation(download_path='data/downloads/inundation_masks'):
+
+def download_new_inundation(download_path='data/downloads/inundation_masks', burn_in_steps=18):
     """
-    Download inundation data for dates not already downloaded.
+    Download inundation data for the last `burn_in_steps` timesteps (to refresh them)
+    plus any new dates up to the current date.
 
     Parameters:
         download_path (str): Directory path to save downloaded TIF files.
+        burn_in_steps (int): Number of timesteps to always refresh.
     """
     current_date_str = datetime.now().strftime("%Y-%m-%d")
     historic_dates = get_historic_dates()
 
     if historic_dates:
-        last_date = historic_dates[-1]  # Get the last downloaded date
-        last_date = datetime.strptime(last_date, "%Y-%m-%d").strftime("%Y-%m-%d")  # Ensure the format is YYYY-MM-DD
+        # Always include the last N dates to refresh
+        if len(historic_dates) >= burn_in_steps:
+            start_date = historic_dates[-burn_in_steps]
+        else:
+            start_date = historic_dates[0]
     else:
-        last_date = '2002-07-01'   # Default value if no dates are found
+        # Default if no history exists
+        start_date = "2002-07-01"
 
-    new_dates = cleaning_utils.get_dates_of_interest(start_date_str=last_date, end_date_str=current_date_str)
+    # Get all dates of interest (last N + up to today)
+    new_dates = cleaning_utils.get_dates_of_interest(
+        start_date_str=start_date,
+        end_date_str=current_date_str
+    )
 
     if new_dates:
+        logging.info(f"Downloading {len(new_dates)} dates (including last {burn_in_steps} for refresh).")
         download_inundation(new_dates, download_path)
     else:
         logging.info("No new dates to download.")
@@ -254,6 +271,64 @@ def crop_historic_data(file_path, temporal_data_path, temporal_data_path_scaled)
     else:
         print("No cropping needed. Dataset already matches temporal data length.")
         
+        
+def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
+                        temporal_data_path="data/historic/inundation_temporal_unscaled.csv",
+                        temporal_data_path_scaled="data/historic/inundation_temporal_scaled.csv",
+                        dset_name="inundation",
+                        burn_in_steps=18):
+    """
+    Remove past `burn_in_steps` dekads from saved MODIS data 
+    (spatio-temporal HDF5 dataset and temporal CSVs).
+    
+    Parameters:
+        h5_file_path (str): Path to spatio-temporal historic MODIS HDF5 file.
+        temporal_data_path (str): Path to temporal unscaled CSV file.
+        temporal_data_path_scaled (str): Path to temporal scaled CSV file.
+        dset_name (str): Name of dataset inside the HDF5 file.
+        burn_in_steps (int): Number of timesteps (along axis 0) to drop.
+    """
+    # --- Process HDF5 file ---
+    with h5py.File(h5_file_path, "r") as f:
+        if dset_name not in f:
+            raise KeyError(f"Dataset '{dset_name}' not found in {h5_file_path}.")
+        data = f[dset_name][:]
+    
+    # Crop first axis (remove first `burn_in_steps` entries)
+    if data.shape[0] <= burn_in_steps:
+        raise ValueError("Not enough timesteps to remove burn-in data.")
+    data_cropped = data[burn_in_steps:]
+    
+    # Overwrite file with cropped dataset
+    with h5py.File(h5_file_path, "w") as f:
+        dset = f.create_dataset(
+            dset_name,
+            shape=data_cropped.shape,
+            maxshape=(None, data_cropped.shape[1], data_cropped.shape[2]),
+            chunks=True,
+            dtype=data_cropped.dtype,
+        )
+        dset[:] = data_cropped
+
+    # --- Process temporal CSV files ---
+    for csv_path in [temporal_data_path, temporal_data_path_scaled]:
+        df = pd.read_csv(csv_path)
+        if len(df) <= burn_in_steps:
+            raise ValueError(f"Not enough rows in {csv_path} to remove burn-in data.")
+        
+        # Remove burn-in rows
+        df_cropped = df.iloc[burn_in_steps:].reset_index(drop=True)
+        
+        # Ensure sorted by 'date' column if it exists
+        if "date" in df_cropped.columns:
+            df_cropped["date"] = pd.to_datetime(df_cropped["date"])
+            df_cropped = df_cropped.sort_values("date").reset_index(drop=True)
+        
+        # Save back to CSV
+        df_cropped.to_csv(csv_path, index=False)
+    
+    print(f"Removed first {burn_in_steps} timesteps from HDF5 and temporal CSVs (sorted by date).")
+        
 
 def update_inundation(download_path='data/downloads/inundation_masks',
                       temporal_data_path='data/historic/inundation_temporal_unscaled.csv',
@@ -270,6 +345,9 @@ def update_inundation(download_path='data/downloads/inundation_masks',
         with h5py.File('data/historic/inundation.h5', 'r') as f:
             inundation_historic = f['inundation']
             logging.info(f"Existing inundation data shape: {inundation_historic.shape}")
+            
+        # Remove burn-in data
+        remove_burn_in_data()
 
         # Update inundation data by downloading new files
         download_new_inundation(download_path)
@@ -345,8 +423,8 @@ def update_inundation(download_path='data/downloads/inundation_masks',
         inundation_temporal_new_scaled = pd.concat([inundation_temporal_historic_scaled, inundation_temporal_scaled])
         
         # Save the updated temporal data
-        inundation_temporal_new.to_csv('data/historic/inundation_temporal_unscaled.csv', index=False)
-        inundation_temporal_new_scaled.to_csv('data/historic/inundation_temporal_scaled.csv', index=False)
+        inundation_temporal_new.sort_values("date").to_csv('data/historic/inundation_temporal_unscaled.csv', index=False)
+        inundation_temporal_new_scaled.sort_values("date").to_csv('data/historic/inundation_temporal_scaled.csv', index=False)
             
     except Exception as e:
         logging.error(f"Error processing new inundation data: {e}")

@@ -1,4 +1,4 @@
-"""Code for downloading the Oceanic Nino Index (ONI)."""
+"""Code for downloading the Dipole Mode Index (DMI)."""
 
 import os
 from pathlib import Path
@@ -9,6 +9,7 @@ import requests
 import typer
 
 import pandas as pd
+import numpy as np
 
 SOURCE_URL = "https://www.cpc.ncep.noaa.gov/products/international/ocean_monitoring/indian/IODMI/mnth.ersstv5.clim19912020.dmi_current.txt"
 FILE_PATH_PARTS = ("data/downloads/teleconnections", "dmi.txt")
@@ -44,8 +45,15 @@ def clean_dmi(df_dmi):
     # Basic cleaning for dmi dataset
     df_dmi = df_dmi.rename(columns={
         'Year': 'year', 'Month': 'month', 'WTIO': 'wtio',
-        'SETIO': 'setio', 'DMI': 'dmi'})
+        'SETIO': 'setio', 'DMI': 'dmi'
+    })
+    
+    # Replace '********' with NaN
+    df_dmi = df_dmi.replace("********", np.nan)
+    df_dmi[['wtio', 'setio', 'dmi']] = df_dmi[['wtio', 'setio', 'dmi']].apply(pd.to_numeric, errors='coerce')
+    
     return df_dmi
+
 
 def process_dmi():
     download_dmi()

@@ -224,52 +224,52 @@ def download_new_inundation(download_path='data/downloads/inundation_masks', bur
         
 def crop_historic_data(file_path, temporal_data_path, temporal_data_path_scaled):
     """
-    Crop the historic inundation HDF5 dataset if its temporal dimension
-    is longer than the provided temporal data CSVs.
+    Crop or recreate the historic inundation HDF5 dataset to match the temporal CSV lengths.
 
-    Parameters
-    ----------
-    file_path : str
-        Path to the HDF5 file containing historic inundation data.
-    temporal_data_path : str
-        Path to the CSV file containing temporal data.
-    temporal_data_path_scaled : str
-        Path to the CSV file containing scaled temporal data.
+    If the HDF5 dataset is longer than the CSVs, the entire HDF5 file will be truncated and recreated.
+    Both the original and scaled temporal CSVs are cropped if the HDF5 dataset is shorter.
     """
-    # Load temporal data
-    inundation_temporal_historic = pd.read_csv(temporal_data_path)
-    inundation_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)
 
-    len_hist = len(inundation_temporal_historic)
-    len_hist_scaled = len(inundation_temporal_historic_scaled)
+    # --- Load temporal data lengths only ---
+    hist = pd.read_csv(temporal_data_path)
+    hist_scaled = pd.read_csv(temporal_data_path_scaled)
+    new_len = min(len(hist), len(hist_scaled))
 
-    with h5py.File(file_path, "r") as f:
+    # --- Open HDF5 and check dataset length ---
+    with h5py.File(file_path, "r+") as f:
         dset_name = list(f.keys())[0]
-        current_len = f[dset_name].shape[0]
+        dset = f[dset_name]
+        current_len = dset.shape[0]
 
-    if (current_len > len_hist) or (current_len > len_hist_scaled):
-        print("Rescaling inundation historic spatio-temporal array to match temporal array...")
-        new_len = min(len_hist, len_hist_scaled)
+        # --- If HDF5 shorter, crop CSVs to match ---
+        if current_len < new_len:
+            hist.iloc[:current_len].to_csv(temporal_data_path, index=False)
+            hist_scaled.iloc[:current_len].to_csv(temporal_data_path_scaled, index=False)
+            print(f"✂️ Cropped CSVs to {current_len} timesteps.")
 
-        # Read cropped data
-        with h5py.File(file_path, "r") as f:
-            dset_name = list(f.keys())[0]
-            data = f[dset_name][:new_len]
+        # --- If HDF5 longer, recreate file (truncate + rewrite) ---
+        elif current_len > new_len:
+            print(f"Cropping HDF5 from {current_len} → {new_len} timesteps...")
 
-        # Overwrite file with cropped dataset
-        with h5py.File(file_path, "w") as f:
-            dset = f.create_dataset(
-                dset_name,
-                shape=data.shape,
-                maxshape=(None, data.shape[1], data.shape[2]),
-                chunks=True,
-                dtype=data.dtype,
-            )
-            dset[:] = data
+            # Read cropped data before removing file
+            data = dset[:new_len]
+            dtype, shape = dset.dtype, data.shape
+            f.close()  # close handle before removing
 
-        print(f"Dataset cropped to {new_len} timesteps.")
-    else:
-        print("No cropping needed. Dataset already matches temporal data length.")
+            # Remove and recreate (truncate)
+            os.remove(file_path)
+            with h5py.File(file_path, "w") as newf:
+                newf.create_dataset(
+                    dset_name,
+                    data=data,
+                    maxshape=(None, *shape[1:]),
+                    chunks=True,
+                    dtype=dtype,
+                )
+            print("✅ HDF5 file truncated and recreated with cropped data.")
+
+        else:
+            print("✅ No cropping needed. Temporal lengths already match.")
         
         
 def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
@@ -278,7 +278,7 @@ def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
                         dset_name="inundation",
                         burn_in_steps=18):
     """
-    Remove past `burn_in_steps` dekads from saved MODIS data 
+    Remove the last `burn_in_steps` dekads from saved MODIS data 
     (spatio-temporal HDF5 dataset and temporal CSVs).
     
     Parameters:
@@ -286,25 +286,28 @@ def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
         temporal_data_path (str): Path to temporal unscaled CSV file.
         temporal_data_path_scaled (str): Path to temporal scaled CSV file.
         dset_name (str): Name of dataset inside the HDF5 file.
-        burn_in_steps (int): Number of timesteps (along axis 0) to drop.
+        burn_in_steps (int): Number of timesteps (along axis 0) to drop from the end.
     """
+    import pandas as pd
+    import h5py
+
     # --- Process HDF5 file ---
     with h5py.File(h5_file_path, "r") as f:
         if dset_name not in f:
             raise KeyError(f"Dataset '{dset_name}' not found in {h5_file_path}.")
         data = f[dset_name][:]
-    
-    # Crop first axis (remove first `burn_in_steps` entries)
+
+    # Crop last axis (remove last `burn_in_steps` entries)
     if data.shape[0] <= burn_in_steps:
         raise ValueError("Not enough timesteps to remove burn-in data.")
-    data_cropped = data[burn_in_steps:]
-    
+    data_cropped = data[:-burn_in_steps]
+
     # Overwrite file with cropped dataset
     with h5py.File(h5_file_path, "w") as f:
         dset = f.create_dataset(
             dset_name,
             shape=data_cropped.shape,
-            maxshape=(None, data_cropped.shape[1], data_cropped.shape[2]),
+            maxshape=(None, *data_cropped.shape[1:]),
             chunks=True,
             dtype=data_cropped.dtype,
         )
@@ -316,8 +319,8 @@ def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
         if len(df) <= burn_in_steps:
             raise ValueError(f"Not enough rows in {csv_path} to remove burn-in data.")
         
-        # Remove burn-in rows
-        df_cropped = df.iloc[burn_in_steps:].reset_index(drop=True)
+        # Remove last burn-in rows
+        df_cropped = df.iloc[:-burn_in_steps].reset_index(drop=True)
         
         # Ensure sorted by 'date' column if it exists
         if "date" in df_cropped.columns:
@@ -327,7 +330,7 @@ def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
         # Save back to CSV
         df_cropped.to_csv(csv_path, index=False)
     
-    print(f"Removed first {burn_in_steps} timesteps from HDF5 and temporal CSVs (sorted by date).")
+    print(f"Removed last {burn_in_steps} timesteps from HDF5 and temporal CSVs (sorted by date).")
         
 
 def update_inundation(download_path='data/downloads/inundation_masks',
@@ -345,6 +348,13 @@ def update_inundation(download_path='data/downloads/inundation_masks',
         with h5py.File('data/historic/inundation.h5', 'r') as f:
             inundation_historic = f['inundation']
             logging.info(f"Existing inundation data shape: {inundation_historic.shape}")
+            
+        # Crop historic data if historic spatial and temporal data are not the same size   
+        crop_historic_data(
+            file_path="data/historic/inundation.h5",
+            temporal_data_path=temporal_data_path,
+            temporal_data_path_scaled=temporal_data_path_scaled
+        )
             
         # Remove burn-in data
         remove_burn_in_data()
@@ -400,30 +410,25 @@ def update_inundation(download_path='data/downloads/inundation_masks',
             inundation_temporal[f"percent_inundation_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
             scaled_region_temporal_data = (inundation_temporal[f'percent_inundation_{region_code}'] - temporal_mean_region) / temporal_std_region
             inundation_temporal_scaled[f'percent_inundation_{region_code}'] = scaled_region_temporal_data
-        
-        # Crop historic data if historic spatial and temporal data are not the same size   
-        crop_historic_data(
-            file_path="data/historic/inundation.h5",
-            temporal_data_path=temporal_data_path,
-            temporal_data_path_scaled=temporal_data_path_scaled
-        )
 
         # Combine existing and new inundation data
         with h5py.File('data/historic/inundation.h5', 'a') as hdf:
             dset = hdf['inundation']
+            old_dataset_length = dset.shape[0]
             dset.resize(dset.shape[0] + len(new_clipped_tif_files), axis=0)
             dset[-len(new_clipped_tif_files):] = new_clipped_tif_files
             logging.info(f"Updated inundation data shape: {dset.shape}")
-            new_dataset_length = dset.shape[0]
             
         # Update temporal data
-        inundation_temporal_historic = pd.read_csv(temporal_data_path)[:new_dataset_length] # Crop to length of spatial data
-        inundation_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)[:new_dataset_length] # Crop to length of spatial data
+        inundation_temporal_historic = pd.read_csv(temporal_data_path)[:old_dataset_length] # Crop to length of spatial data
+        inundation_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)[:old_dataset_length] # Crop to length of spatial data
         inundation_temporal_new = pd.concat([inundation_temporal_historic, inundation_temporal])
         inundation_temporal_new_scaled = pd.concat([inundation_temporal_historic_scaled, inundation_temporal_scaled])
         
         # Save the updated temporal data
+        inundation_temporal_new['date'] = pd.to_datetime(inundation_temporal_new['date'], format='%Y-%m-%d')
         inundation_temporal_new.sort_values("date").to_csv('data/historic/inundation_temporal_unscaled.csv', index=False)
+        inundation_temporal_new_scaled['date'] = pd.to_datetime(inundation_temporal_new_scaled['date'], format='%Y-%m-%d')
         inundation_temporal_new_scaled.sort_values("date").to_csv('data/historic/inundation_temporal_scaled.csv', index=False)
             
     except Exception as e:

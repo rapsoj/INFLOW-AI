@@ -131,6 +131,47 @@ def load_new_gridded_rainfall_data(temporal_data_path='data/historic/gridded_rai
 	    gridded_rainfall_cumulative_last = np.expand_dims(dataset[-1, :, :], axis=0)
 
 	return gridded_rainfall_new, gridded_rainfall_cumulative_last
+	
+	
+def crop_historic_data(file_path, temporal_data_path):
+    """
+    Crop or recreate the historic inundation HDF5 dataset to match the temporal CSV length.
+
+    If the HDF5 dataset is longer than the CSV, the entire HDF5 file will be truncated and recreated.
+    """
+
+    # --- Load temporal data length only ---
+    hist = pd.read_csv(temporal_data_path)
+    new_len = len(hist)
+
+    # --- Open HDF5 and check dataset length ---
+    with h5py.File(file_path, "r+") as f:
+        dset_name = list(f.keys())[0]
+        dset = f[dset_name]
+        current_len = dset.shape[0]
+
+        if current_len < new_len:
+            hist.iloc[:current_len].to_csv(temporal_data_path, index=False)
+
+        elif current_len > new_len:
+            print(f"Cropping from {current_len} → {new_len} timesteps...")
+
+            # 🔥 NEW: overwrite file entirely if HDF5 is longer than CSV
+            f.close()  # Close open handle
+            os.remove(file_path)  # Truncate file (delete completely)
+
+            # Recreate the HDF5 file with the cropped data
+            with h5py.File(file_path, "w") as newf:
+                newf.create_dataset(
+                    dset_name,
+                    data=dset[:new_len],
+                    maxshape=(None, *dset.shape[1:]),
+                    chunks=True,
+                    dtype=dset.dtype,
+                )
+            print("✅ File truncated and recreated with cropped data.")
+        else:
+            print("✅ No cropping needed. Temporal lengths already match.")
 
 
 def update_gridded_rainfall_cumulative(
@@ -145,7 +186,12 @@ def update_gridded_rainfall_cumulative(
     """
 
     try:
-
+        # Crop historic data if historic spatial and temporal data are not the same size   
+        crop_historic_data(
+            file_path="data/historic/gridded_rainfall_cumulative.h5",
+            temporal_data_path=temporal_data_path,
+            )
+            
         # Load new gridded rainfall data
         gridded_rainfall_new, gridded_rainfall_cumulative_last = load_new_gridded_rainfall_data()
         historic_dates = get_historic_dates()
@@ -191,13 +237,13 @@ def update_gridded_rainfall_cumulative(
             # Append new data to HDF5
             with h5py.File(data_path, 'a') as hdf:
                 dset = hdf['cumulative_rainfall']
+                old_dataset_length = dset.shape[0]
                 dset.resize(dset.shape[0] + new_data.shape[0], axis=0)
                 dset[-new_data.shape[0]:] = new_data
                 logging.info(f"Updated cumulative rainfall dataset shape: {dset.shape}")
-                new_dataset_length = dset.shape[0]
             
             # Update temporal data
-            rainfall_cumulative_temporal_historic = pd.read_csv(temporal_data_path)[:new_dataset_length] # Crop to length of spatial data
+            rainfall_cumulative_temporal_historic = pd.read_csv(temporal_data_path)[:old_dataset_length] # Crop to length of spatial data
             rainfall_cumulative_temporal_new = pd.concat([rainfall_cumulative_temporal_historic, rainfall_cumulative_temporal])
             
             # Save the updated temporal data

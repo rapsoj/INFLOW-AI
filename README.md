@@ -55,10 +55,14 @@ This program is a machine learning model designed to predict flood inundation co
    - Data can be downloaded from the [Google Drive](https://drive.google.com/drive/folders/1TW4Vfhu9SrrVrvonclicaWqy5hHBY7vv?usp=sharing)
    - Save the folder as `data` in the parent directory
 
-4. Set up a virtual environment (optional but recommended):
-`python3 -m venv env source env/bin/activate # On Windows, use env\Scripts\activate`
+3. Instantiate a conda enviroment for Python 3.11:
+  ```
+  conda create -n inflow_ai python=3.11
+  conda activate inflow_ai
+  conda install -c conda-forge rasterio=1.4.3
+  ```
 
-5. Install the required libraries:
+4. Install the required libraries:
 `pip install -r requirements.txt`
 
 

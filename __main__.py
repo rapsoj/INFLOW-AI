@@ -18,6 +18,9 @@ from processing.data_cleaning import process_gridded_moisture
 # Import model prediction functions
 from model import make_spatial_prediction
 
+# Import model explanation functions
+from explanations import plot_explanations
+
 # Import data manipulation libraries
 import numpy as np
 import pandas as pd
@@ -564,6 +567,7 @@ def main():
 	    export_graphs(data, future_dates, inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled)
 	    print_trigger(inundation_pred, future_dates)
 	    make_spatial_prediction.run_full_spatial_analysis()
+	    plot_explanations.get_explanations()
 
 	    logging.info(f"Predictions exported.")
 

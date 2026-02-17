@@ -1,8 +1,10 @@
-/testing/
-
-# Ignore Python cache files
+data/
+model/testing/
+*.csv
+*.pkl
+*.h5
+*.pt
+*.ckpt
+*.ipynb
 __pycache__/
-*.pyc
-
-# Ignore macOS system files
-.DS_Store
+.ipynb_checkpoints/

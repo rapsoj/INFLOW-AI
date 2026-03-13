@@ -72,8 +72,11 @@ def generate_deployment_sequences_in_memory(
         logger.warning(f"  - Inundation: {inun_len}")
         logger.warning(f"  - Rainfall:   {rain_len}")
         logger.warning(f"  - Moisture:   {moist_len}")
-        logger.info(f"Using inundation length ({inun_len}) as reference.")
-    T = inun_len
+    
+    T = min(inun_len, rain_len, moist_len)
+    
+    if not (inun_len == rain_len == moist_len):
+        logger.info(f"Using shortest time series ({T}) as reference.")
 
     # === Load static maps ===
     elevation = np.load(os.path.join(static_dir, 'elevation.npy'))  # (1, H, W)

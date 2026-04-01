@@ -353,6 +353,113 @@ def align_mask(mask_array, src_transform, src_crs, metas, inundation_file):
     return aligned
 
 
+def _resolve_latlon_columns(df):
+    lat_cols = ['latitude', 'lat', 'Latitude', 'LAT', 'Y', 'y']
+    lon_cols = ['longitude', 'lon', 'Longitude', 'LON', 'X', 'x']
+    lat_col = next((c for c in lat_cols if c in df.columns), None)
+    lon_col = next((c for c in lon_cols if c in df.columns), None)
+    if lat_col is None or lon_col is None:
+        raise ValueError("Could not identify latitude/longitude columns in exposure file")
+    return lat_col, lon_col
+
+
+def load_exposure_gdf(filepath, facility_type):
+    if filepath.lower().endswith('.csv'):
+        df = pd.read_csv(filepath)
+    elif filepath.lower().endswith('.xlsx') or filepath.lower().endswith('.xls'):
+        df = pd.read_excel(filepath)
+    else:
+        raise ValueError(f"Unsupported exposure file format for {filepath}")
+
+    lat_col, lon_col = _resolve_latlon_columns(df)
+    name_col = next((c for c in ['name', 'Name', 'facility_name', 'Facility Name'] if c in df.columns), None)
+    if name_col is None:
+        df['name'] = f"unknown_{facility_type}"
+        name_col = 'name'
+
+    gdf = gpd.GeoDataFrame(
+        df.assign(geometry=gpd.points_from_xy(df[lon_col], df[lat_col])),
+        geometry='geometry',
+        crs='EPSG:4326'
+    )
+    gdf = gdf.rename(columns={name_col: 'name'})
+    gdf = gdf[['name', lat_col, lon_col, 'geometry']].copy()
+    gdf['facility_type'] = facility_type
+    gdf = gdf.rename(columns={lat_col: 'latitude', lon_col: 'longitude'})
+    return gdf
+
+
+def get_exposure_points(hospital_path, school_path):
+    nodes = []
+    for path, facility_type in [(hospital_path, 'hospital'), (school_path, 'school')]:
+        if not os.path.exists(path):
+            logger.warning(f"Exposure file not found; skipping: {path}")
+            continue
+        try:
+            gdf = load_exposure_gdf(path, facility_type)
+            nodes.append(gdf)
+            logger.info(f"Loaded {len(gdf)} {facility_type} records from {path}")
+        except Exception as e:
+            logger.warning(f"Failed to load exposure data from {path}: {e}")
+
+    if not nodes:
+        logger.warning("No exposure points loaded; no impact CSV will be created.")
+        return gpd.GeoDataFrame(columns=['name', 'latitude', 'longitude', 'facility_type', 'geometry'])
+
+    all_points = pd.concat(nodes, ignore_index=True)
+    return gpd.GeoDataFrame(all_points, geometry='geometry', crs='EPSG:4326')
+
+
+def get_impacted_exposure_points(points_gdf, aligned_mask, transform):
+    if points_gdf.empty:
+        return pd.DataFrame(columns=['name', 'latitude', 'longitude', 'facility_type', 'impacted'])
+
+    # We assume points_gdf is already in the same CRS as the mask transform.
+    points = points_gdf
+
+    xs = points.geometry.x.to_list()
+    ys = points.geometry.y.to_list()
+
+    # rasterio.transform.rowcol returns (row, col) based on coordinate-to-pixel mapping.
+    rows, cols = rasterio.transform.rowcol(transform, xs, ys, op=np.floor)
+
+    impacted = []
+    for row, col in zip(rows, cols):
+        if 0 <= row < aligned_mask.shape[0] and 0 <= col < aligned_mask.shape[1]:
+            impacted.append(bool(aligned_mask[row, col] == 1))
+        else:
+            impacted.append(False)
+
+    out = points.copy()
+    out['impacted'] = impacted
+    return out
+
+
+def export_impacted_facilities(masks, metas, inundation_file, points_gdf, output_dir):
+    if points_gdf.empty:
+        logger.warning("No exposure points found, skipping impact CSV generation.")
+        return None
+
+    target_crs = metas[inundation_file]['crs']
+    target_transform = metas[inundation_file]['transform']
+
+    points_projected = points_gdf.to_crs(target_crs)
+    result = points_projected[['name', 'latitude', 'longitude', 'facility_type']].copy()
+
+    for scenario in ['Worst Case', 'Average Case', 'Best Case']:
+        aligned = align_mask((masks[scenario] > 0).astype(np.uint8),
+                             metas[inundation_file]['transform'],
+                             metas[inundation_file]['crs'],
+                             metas, inundation_file)
+        impacted = get_impacted_exposure_points(points_projected, aligned, metas[inundation_file]['transform'])
+        result[f'{scenario.lower().replace(" ", "_")}'] = impacted['impacted'].values
+
+    csv_path = output_dir / 'impacted_schools_hospitals.csv'
+    result.to_csv(csv_path, index=False)
+    logger.info(f"Saved impacted facility list: {csv_path}")
+    return csv_path
+
+
 def plot_flood_change_map(
     masks, current_extent, transform, crs, regions_gdf,
     inundation_clipped, metas, inundation_file='20250211.tif',
@@ -835,3 +942,12 @@ def run_full_spatial_analysis():
 
     # Export for QGIS
     export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder_title, metas, inundation_file='20250211.tif')
+
+    # --- Exposure impact reporting for schools and hospitals ---
+    hospital_csv = 'data/downloads/hospitals.csv'
+    school_csv = 'data/downloads/schools.csv'
+
+    exposure_points = get_exposure_points(hospital_csv, school_csv)
+    export_impacted_facilities(masks, metas, '20250211.tif', exposure_points, output_dir)
+
+    logger.info('run_full_spatial_analysis completed: flood maps and exposure impact report generated.')

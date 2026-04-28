@@ -159,4 +159,4 @@ This project is licensed under the [MIT License](https://github.com/rapsoj/INFLO
 
 ## Contact
 For questions or issues, please contact:
-- Email: jessicakristenr@gmail.com
+- Email: jessicarapson@algorithmicgovernance.org

@@ -1,0 +1,32 @@
+[project]
+data_dir = "data"
+predictions_dir = "predictions"
+models_dir = "model"
+
+[pipeline]
+temporal_sequence_length = 36
+temporal_forecast_length = 6
+trigger_delta = 0.05
+mc_samples = 1000
+
+[spatial]
+patch_size = 64
+stride = 32
+sequence_length = 6
+forecast_length = 6
+border = 4
+
+[files]
+temporal_seasonal = "data/temporal_data_seasonal_df.csv"
+historic_dir = "data/historic"
+stats_dir = "data/stats"
+maps_dir = "data/maps"
+downloads_dir = "data/downloads"
+inundation_temporal_unscaled = "data/historic/inundation_temporal_unscaled.csv"
+inundation_temporal_scaled = "data/historic/inundation_temporal_scaled.csv"
+seasonal_means = "data/stats/seasonal_means.csv"
+seasonal_stds = "data/stats/seasonal_stds.csv"
+spatial_model = "model/spatial_model.keras"
+temporal_model = "model/temporal_model.keras"
+temporal_model_rf = "model/temporal_model.pkl"
+pca_model = "model/pca_model.pkl"

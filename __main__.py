@@ -1,5 +1,12 @@
 # Import system libraries
 import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+	sys.path.insert(0, str(SRC))
 
 # Import cleaning utils
 from processing import cleaning_utils
@@ -43,9 +50,13 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.colors as mcolors
 
+from inflow_ai.settings import get_settings
+
 # Configure logging
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+SETTINGS = get_settings()
 
 
 def get_future_dates(data):
@@ -62,13 +73,16 @@ def get_future_dates(data):
 	return future_dates
 
 
-def check_if_new_data(data_path='data/temporal_data_seasonal_df.csv'):
+def check_if_new_data(data_path=None):
     """
     Prevents running data update if model is run during a dekad already in the data.
 
     Parameters:
         data_path: Path to temporal data from previous update.
     """
+    if data_path is None:
+        data_path = SETTINGS.temporal_seasonal
+
     data = pd.read_csv(data_path, index_col=0)
     today_date = datetime.today().strftime("%Y-%m-%d")
     last_date = data.index[-1]
@@ -110,18 +124,18 @@ def create_dataframe():
 	Create dataframe from recently refreshed data.
 	"""
 	# Load data
-	victoria = pd.read_csv('data/historic/victoria.csv', index_col='date')
-	albert = pd.read_csv('data/historic/albert.csv', index_col='date')
-	kyoga = pd.read_csv('data/historic/kyoga.csv', index_col='date')
-	rainfall = pd.read_csv('data/historic/rainfall.csv', index_col='date')
-	teleconnections = pd.read_csv('data/historic/teleconnections.csv', index_col='date')
-	inundation_temporal_scaled = pd.read_csv('data/historic/inundation_temporal_scaled.csv', index_col='date')
-	gridded_rainfall_temporal = pd.read_csv('data/historic/gridded_rainfall_temporal.csv', index_col='date')
-	gridded_rainfall_cumulative_temporal = pd.read_csv('data/historic/gridded_rainfall_cumulative_temporal.csv', index_col='date')
-	gridded_moisture_temporal = pd.read_csv('data/historic/gridded_moisture_temporal.csv', index_col='date')
+	victoria = pd.read_csv(f'{SETTINGS.historic_dir}/victoria.csv', index_col='date')
+	albert = pd.read_csv(f'{SETTINGS.historic_dir}/albert.csv', index_col='date')
+	kyoga = pd.read_csv(f'{SETTINGS.historic_dir}/kyoga.csv', index_col='date')
+	rainfall = pd.read_csv(f'{SETTINGS.historic_dir}/rainfall.csv', index_col='date')
+	teleconnections = pd.read_csv(f'{SETTINGS.historic_dir}/teleconnections.csv', index_col='date')
+	inundation_temporal_scaled = pd.read_csv(SETTINGS.inundation_temporal_scaled, index_col='date')
+	gridded_rainfall_temporal = pd.read_csv(f'{SETTINGS.historic_dir}/gridded_rainfall_temporal.csv', index_col='date')
+	gridded_rainfall_cumulative_temporal = pd.read_csv(f'{SETTINGS.historic_dir}/gridded_rainfall_cumulative_temporal.csv', index_col='date')
+	gridded_moisture_temporal = pd.read_csv(f'{SETTINGS.historic_dir}/gridded_moisture_temporal.csv', index_col='date')
 
 	# Calculate inundation delta
-	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')
+	inundation_temporal_unscaled = pd.read_csv(SETTINGS.inundation_temporal_unscaled, index_col='date')
 	inundation_temporal_delta = inundation_temporal_unscaled[['percent_inundation']].diff()
 	inundation_temporal_delta.columns = ['inundation_delta']
 
@@ -143,8 +157,8 @@ def create_dataframe():
 	# Create month-day index and load saved seasonal statistics for scaling
 	temporal_data_df['month_day'] = pd.to_datetime(temporal_data_df.index).strftime('%m-%d')
 	temporal_data_seasonal_df = temporal_data_df.copy()
-	means = pd.read_csv('data/stats/seasonal_means.csv', index_col='month_day')
-	stds = pd.read_csv('data/stats/seasonal_stds.csv', index_col='month_day')
+	means = pd.read_csv(SETTINGS.seasonal_means, index_col='month_day')
+	stds = pd.read_csv(SETTINGS.seasonal_stds, index_col='month_day')
 
 	# Normalize each variable using the corresponding means and stds
 	for column in temporal_data_seasonal_df.columns[:-1]:  # Exclude the month_day column
@@ -172,7 +186,7 @@ def create_dataframe():
 
 	# Drop month-day column
 	temporal_data_seasonal_df = temporal_data_seasonal_df.drop('month_day', axis=1).dropna()
-	temporal_data_seasonal_df.to_csv('data/temporal_data_seasonal_df.csv')
+	temporal_data_seasonal_df.to_csv(SETTINGS.temporal_seasonal)
 
 	return temporal_data_seasonal_df
 
@@ -200,7 +214,7 @@ def custom_loss(y_true, y_pred):
     return total_loss
 
 
-def predict_new_inundation_transformer(data, model_path='model/temporal_model.keras', custom_loss_function=custom_loss):
+def predict_new_inundation_transformer(data, model_path=None, custom_loss_function=custom_loss):
 	"""
 	Predict new inundation based on updated data.
 
@@ -214,6 +228,8 @@ def predict_new_inundation_transformer(data, model_path='model/temporal_model.ke
 	X_pred_reshaped = np.expand_dims(X_pred, axis=0)
 
 	# Load model and custom loss function
+	if model_path is None:
+		model_path = SETTINGS.temporal_model
 	model_delta = load_model(model_path, custom_objects={'custom_loss': custom_loss})
 	y_pred = model_delta.predict(X_pred_reshaped)
 
@@ -222,7 +238,7 @@ def predict_new_inundation_transformer(data, model_path='model/temporal_model.ke
 	return y_pred, X_pred_reshaped, model_delta
 	
 	
-def predict_new_inundation_rf(data, model_path='model/temporal_model.pkl', pca_path='model/pca_model.pkl'):
+def predict_new_inundation_rf(data, model_path=None, pca_path=None):
 	"""
 	Predict new inundation based on updated data.
 
@@ -232,6 +248,10 @@ def predict_new_inundation_rf(data, model_path='model/temporal_model.pkl', pca_p
 	"""
 	# Select data for prediction
 	X_pred = data.iloc[-36:,:-1].values
+	if model_path is None:
+		model_path = SETTINGS.temporal_model_rf
+	if pca_path is None:
+		pca_path = SETTINGS.pca_model
 	pca = joblib.load(pca_path)
 	X_pred_pca = pca.transform(X_pred)
 	X_pred_pca_expanded = np.expand_dims(X_pred_pca, axis=0)
@@ -305,12 +325,12 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_
 		monte_carlo (boolean): Whether Monte Carlo simulations are necessary to produce confidence intervals, if False, must provide values for upper and lower bounds.
 	"""
 	# Load unscaled temporal inundation data
-	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date').reindex(data.index)
+	inundation_temporal_unscaled = pd.read_csv(SETTINGS.inundation_temporal_unscaled, index_col='date').reindex(data.index)
 	inundation_temporal_unscaled = cleaning_utils.impute_missing_values(inundation_temporal_unscaled, inundation_temporal_unscaled.columns)
 	
 	# Load seasonal statistics
-	means = pd.read_csv('data/stats/seasonal_means.csv', index_col='month_day')
-	stds = pd.read_csv('data/stats/seasonal_stds.csv', index_col='month_day')
+	means = pd.read_csv(SETTINGS.seasonal_means, index_col='month_day')
+	stds = pd.read_csv(SETTINGS.seasonal_stds, index_col='month_day')
 
 	# Intialise arrays to store unscaled values
 	y_pred_unscaled = np.zeros(y_pred.shape)
@@ -373,100 +393,95 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_
 	inundation_pred[inundation_pred < 0] = 0
 
 	return inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation, inundation_temporal_unscaled
-	
-	
 def print_trigger(inundation_pred, future_dates):
-    """
-    Print text file with trigger message if trigger is activated.
-    """
-    # Set threshold
-    threshold_delta = 0.05
-    
-    # Define the folder path
-    folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
-    
-    # Format predictions data
-    inundation_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')[['percent_inundation']]
-    
-    # Export S-EAP trigger if activated 
-    pred_max = np.max(inundation_pred[:, :], axis=1)
-    season_min = inundation_unscaled['percent_inundation'].rolling(window=18, min_periods=1).min().iloc[-1]
-    if pred_max - season_min > threshold_delta:
-        
-        # Write the message to a file
-        today_date = today = date.today().strftime("%Y-%m-%d")
-        trigger_date = future_dates[np.argmax(inundation_pred[:, :])]
-        pred_delta = np.round((pred_max - season_min) * 100, 1)[0]
-        pred_max_round = np.round(pred_max * 100, 1)[0]
-        season_min_round = np.round(season_min * 100, 1)
-        message = (
-        f"Alert triggered on {today_date}. "
-        f"Flood extent predicted to cover {pred_max_round}% of South Sudan by {trigger_date}. "
-        f"This is an increase of {pred_delta}% of the total area of the country that is inundated "
-        f"since the seasonal flood extent minimum of {season_min_round}%, passing the seasonal inundation extent change threshold of 5.0% set out in the S-EAP."
-        )
-        with open(f"{folder_path}/TRIGGER ACTIVATED.txt", "w") as file:
-            file.write(message)
+	"""
+	Print text file with trigger message if trigger is activated.
+	"""
+	# Set threshold
+	threshold_delta = SETTINGS.trigger_delta
+
+	# Define the folder path
+	folder_path = SETTINGS.prediction_run_dir(future_dates[0], future_dates[-1])
+
+	# Format predictions data
+	inundation_unscaled = pd.read_csv(SETTINGS.inundation_temporal_unscaled, index_col='date')[['percent_inundation']]
+
+	# Export S-EAP trigger if activated
+	pred_max = np.max(inundation_pred[:, :], axis=1)
+	season_min = inundation_unscaled['percent_inundation'].rolling(window=18, min_periods=1).min().iloc[-1]
+	if pred_max - season_min > threshold_delta:
+		today_date = today = date.today().strftime("%Y-%m-%d")
+		trigger_date = future_dates[np.argmax(inundation_pred[:, :])]
+		pred_delta = np.round((pred_max - season_min) * 100, 1)[0]
+		pred_max_round = np.round(pred_max * 100, 1)[0]
+		season_min_round = np.round(season_min * 100, 1)
+		message = (
+			f"Alert triggered on {today_date}. "
+			f"Flood extent predicted to cover {pred_max_round}% of South Sudan by {trigger_date}. "
+			f"This is an increase of {pred_delta}% of the total area of the country that is inundated "
+			f"since the seasonal flood extent minimum of {season_min_round}%, passing the seasonal inundation extent change threshold of 5.0% set out in the S-EAP."
+		)
+		with open(folder_path / "TRIGGER ACTIVATED.txt", "w") as file:
+			file.write(message)
 
 
 def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation, future_dates):
 	"""
 	Export CSV with predictions and 95% upper and lower confidence intervals.
 	"""
-    # Create predictions dataframe
-	predictions = pd.DataFrame({'lower_bound_95': lower_bound_unscaled_inundation[0],
-	                            'percent_inundation': inundation_pred[0],
-	                            'upper_bound_95': upper_bound_unscaled_inundation[0]}, index=future_dates)
-	inundation_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')[['percent_inundation']]
+	predictions = pd.DataFrame(
+		{
+			'lower_bound_95': lower_bound_unscaled_inundation[0],
+			'percent_inundation': inundation_pred[0],
+			'upper_bound_95': upper_bound_unscaled_inundation[0],
+		},
+		index=future_dates,
+	)
+	inundation_unscaled = pd.read_csv(SETTINGS.inundation_temporal_unscaled, index_col='date')[['percent_inundation']]
 	predictions = pd.concat([inundation_unscaled, predictions])
-	 
-	# Define the folder path
-	folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
-	
-	# Create the folder if it doesn't exist
+
+	folder_path = SETTINGS.prediction_run_dir(future_dates[0], future_dates[-1])
+
 	if not os.path.exists(folder_path):
-	    os.makedirs(folder_path)
-	    print(f"Folder created: {folder_path}")
+		os.makedirs(folder_path)
+		print(f"Folder created: {folder_path}")
 	else:
-	    print(f"Folder already exists: {folder_path}")
-    
-    # Export predictions as CSV
-	predictions.to_csv(f'{folder_path}/{future_dates[0]}_to_{future_dates[-1]}.csv')
+		print(f"Folder already exists: {folder_path}")
+
+	predictions.to_csv(folder_path / f'{future_dates[0]}_to_{future_dates[-1]}.csv')
 
 
 def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inundation,
-			      upper_bound_unscaled_inundation, inundation_temporal_unscaled):
+                  upper_bound_unscaled_inundation, inundation_temporal_unscaled):
 	"""
 	Export various graphs plotting the new inundation predictions.
 	"""
-	# Convert dates to datetime format for better control over x-axis formattingdates.index = pd.to_datetime(dates.index)  # Ensure dates are in datetime format
-	pred_dates = pd.to_datetime(future_dates)    # Ensure pred_dates are in datetime format
+	# Convert dates to datetime format for better control over x-axis formatting
+	pred_dates = pd.to_datetime(future_dates)
 	pred_dates = np.insert(pred_dates, 0, data.index[-1])
 
 	# Format prediction data
 	inundation_pred_formatted = np.insert(inundation_pred[0], 0, inundation_temporal_unscaled['percent_inundation'].iloc[-1])
 	lower_bound_unscaled_inundation_formatted = np.insert(lower_bound_unscaled_inundation[0], 0, inundation_temporal_unscaled['percent_inundation'].iloc[-1])
-	upper_bound_unscaled_inundation_formatted =  np.insert(upper_bound_unscaled_inundation[0], 0, inundation_temporal_unscaled['percent_inundation'].iloc[-1])
+	upper_bound_unscaled_inundation_formatted = np.insert(upper_bound_unscaled_inundation[0], 0, inundation_temporal_unscaled['percent_inundation'].iloc[-1])
 
 	# Create three different plots at different scales
 	x_lims = [data.index[0], data.index[-180], data.index[-36]]
 	x_lim_names = ['total_record', 'past_five_years', 'past_year']
 	for i in range(len(x_lims)):
-
-		# Plot the test sequence true vs predicted values
 		plt.figure(figsize=(10, 6))
 		plt.plot(pd.to_datetime(data.index), inundation_temporal_unscaled['percent_inundation'], label='Flood Coverage per MODIS Satellite Data', marker='o', linestyle='-', color='blue')
 		plt.plot(pred_dates, inundation_pred_formatted, label='Predicted Flood Coverage (Updated November 1st)', marker='x', linestyle='--', color='red')
 
-		# Fill the area between the lower and upper bounds
-		plt.fill_between(pred_dates,
-		                 lower_bound_unscaled_inundation_formatted,  # Lower bound
-		                 upper_bound_unscaled_inundation_formatted,  # Upper bound
-		                 color='red', alpha=0.2, label='95% Confidence Interval')
+		plt.fill_between(
+			pred_dates,
+			lower_bound_unscaled_inundation_formatted,
+			upper_bound_unscaled_inundation_formatted,
+			color='red', alpha=0.2, label='95% Confidence Interval'
+		)
 
-		# Format the x-axis to show only the year
 		plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-		plt.gca().xaxis.set_major_locator(mdates.YearLocator())  # Set ticks to appear each year
+		plt.gca().xaxis.set_major_locator(mdates.YearLocator())
 
 		plt.xlabel('Year')
 		plt.ylabel('Flood Coverage Over INFLOW Study Area (%)')
@@ -476,31 +491,26 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 		plt.legend()
 		plt.grid(True)
 		plt.xticks(rotation=45)
-		
-		folder_path = f"predictions/inundation_predictions_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}"
-		plt.savefig(f"{folder_path}/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_{x_lim_names[i]}.png", dpi=300)
+
+		folder_path = SETTINGS.prediction_run_dir(pred_dates[1].date().strftime('%Y-%m-%d'), pred_dates.max().date().strftime('%Y-%m-%d'))
+		plt.savefig(folder_path / f"prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_{x_lim_names[i]}.png", dpi=300)
 		plt.close()
 
-	# Convert the index to a datetime index if it's not already
 	inundation_df = pd.DataFrame(inundation_temporal_unscaled, columns=['percent_inundation'])
 	inundation_df.index = pd.to_datetime(inundation_temporal_unscaled.index)
 	inundation_df['predicted'] = False
 
-	# Create dataframe for predicted inundation
 	predicted_inundation_df = pd.DataFrame(inundation_pred_formatted, columns=['percent_inundation'])
 	predicted_inundation_df.index = pd.to_datetime(pred_dates)
 	predicted_inundation_df['predicted'] = True
 
-	# Combine inundation
 	combined_inundation = pd.concat([inundation_df, predicted_inundation_df])
 
-	# Extract the year and the day of year from the date index
 	combined_inundation['Year'] = combined_inundation.index.year
 	combined_inundation['DayOfYear'] = combined_inundation.index.dayofyear
 
-	# Create a colormap for other years (shades of blue and green)
-	colors = list(mcolors.TABLEAU_COLORS.values())  # Colors from Tableau color palette
-	cmap = plt.get_cmap('winter')  # Blue-green colormap
+	colors = list(mcolors.TABLEAU_COLORS.values())
+	cmap = plt.get_cmap('winter')
 
 	# Plot each year's data on the same plot
 	fig, ax = plt.subplots(figsize=(10, 6))
@@ -537,42 +547,40 @@ def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inun
 	ax.set_title(f"Flood Coverage Over INFLOW Study Area, {pred_dates[1].date().strftime('%Y-%m-%d')} to {pred_dates.max().date().strftime('%Y-%m-%d')} ({datetime.today().year} Highlighted in Red)")
 	ax.set_xlabel('Month of Year')
 	ax.set_ylabel('Flood Coverage Over INFLOW Study Area (%)')
-	ax.xaxis.set_major_locator(mdates.MonthLocator())  # Optional: Major ticks by month
-	ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))  # Format x-axis labels as months
+	ax.xaxis.set_major_locator(mdates.MonthLocator())
+	ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
 
-	# Remove the legend (year labels are now on the lines)
 	ax.legend().remove()
 
 	plt.tight_layout()
-	folder_path = f"predictions/inundation_predictions_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}"
-	plt.savefig(f"{folder_path}/prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_year_by_year_comparison.png", dpi=300)
+	folder_path = SETTINGS.prediction_run_dir(pred_dates[1].date().strftime('%Y-%m-%d'), pred_dates.max().date().strftime('%Y-%m-%d'))
+	plt.savefig(folder_path / f"prediction_{pred_dates[1].date().strftime('%Y-%m-%d')}_to_{pred_dates.max().date().strftime('%Y-%m-%d')}_year_by_year_comparison.png", dpi=300)
 	plt.close()
 
 
 def main():
-	
 	"""
 	Main function to run model produce updated predictions.
 	"""
-	
-	try: 
-	    update_data()
-	    data = create_dataframe()
-	    future_dates = get_future_dates(data)
-	    # y_pred, X_pred, model_delta, ci_lower, ci_upper = predict_new_inundation_rf(data)
-	    # inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_carlo=False, lower_bounds=ci_lower, upper_bounds=ci_upper)
-	    y_pred, X_pred, model_delta = predict_new_inundation_transformer(data)
-	    inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta)
-	    export_csv(inundation_pred, lb_pred, ub_pred, future_dates)
-	    export_graphs(data, future_dates, inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled)
-	    print_trigger(inundation_pred, future_dates)
-	    make_spatial_prediction.run_full_spatial_analysis()
-	    plot_explanations.get_explanations()
 
-	    logging.info(f"Predictions exported.")
+	try:
+		update_data()
+		data = create_dataframe()
+		future_dates = get_future_dates(data)
+		# y_pred, X_pred, model_delta, ci_lower, ci_upper = predict_new_inundation_rf(data)
+		# inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_carlo=False, lower_bounds=ci_lower, upper_bounds=ci_upper)
+		y_pred, X_pred, model_delta = predict_new_inundation_transformer(data)
+		inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta)
+		export_csv(inundation_pred, lb_pred, ub_pred, future_dates)
+		export_graphs(data, future_dates, inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled)
+		print_trigger(inundation_pred, future_dates)
+		make_spatial_prediction.run_full_spatial_analysis()
+		plot_explanations.get_explanations()
+
+		logging.info(f"Predictions exported.")
 
 	except Exception as e:
-	    print(f"Error occurred while exporting predictions: {e}")
+		print(f"Error occurred while exporting predictions: {e}")
 
 
 if __name__ == "__main__":

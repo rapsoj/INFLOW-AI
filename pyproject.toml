@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inflow-ai"
+version = "0.1.0"
+description = "Flood inundation prediction workflows for the INFLOW study area"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENCE.md" }
+dependencies = [
+    "geopandas==1.0.1",
+    "descartes",
+    "h5py==3.12.1",
+    "joblib==1.5.0",
+    "loguru==0.7.3",
+    "matplotlib==3.10.0",
+    "netCDF4==1.7.2",
+    "numpy>=2.0.0",
+    "pandas==2.2.2",
+    "py_hydroweb==1.0.2",
+    "rasterio==1.4.3",
+    "requests==2.32.4",
+    "scikit-learn==1.6.1",
+    "scipy>=1.14.1",
+    "shapely",
+    "tensorflow==2.19.0",
+    "keras>=3.0.0",
+    "ml-dtypes>=0.5.0",
+    "tqdm>=4.66.0",
+    "typer==0.15.1",
+    "wget==3.2",
+    "xarray==2025.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+    "pytest",
+    "mypy",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.black]
+line-length = 100

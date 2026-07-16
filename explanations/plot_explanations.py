@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from tqdm import tqdm
 from processing import cleaning_utils
+from inflow_ai.settings import get_settings
+
+
+SETTINGS = get_settings()
 
 
 def create_dataframe():
@@ -13,18 +17,18 @@ def create_dataframe():
     Create dataframe from recently refreshed data.
     """
     # Load data
-    victoria = pd.read_csv('data/historic/victoria.csv', index_col='date')
-    albert = pd.read_csv('data/historic/albert.csv', index_col='date')
-    kyoga = pd.read_csv('data/historic/kyoga.csv', index_col='date')
-    rainfall = pd.read_csv('data/historic/rainfall.csv', index_col='date')
-    teleconnections = pd.read_csv('data/historic/teleconnections.csv', index_col='date')
-    inundation_temporal_scaled = pd.read_csv('data/historic/inundation_temporal_scaled.csv', index_col='date')
-    gridded_rainfall_temporal = pd.read_csv('data/historic/gridded_rainfall_temporal.csv', index_col='date')
-    gridded_rainfall_cumulative_temporal = pd.read_csv('data/historic/gridded_rainfall_cumulative_temporal.csv', index_col='date')
-    gridded_moisture_temporal = pd.read_csv('data/historic/gridded_moisture_temporal.csv', index_col='date')
+    victoria = pd.read_csv(f'{SETTINGS.historic_dir}/victoria.csv', index_col='date')
+    albert = pd.read_csv(f'{SETTINGS.historic_dir}/albert.csv', index_col='date')
+    kyoga = pd.read_csv(f'{SETTINGS.historic_dir}/kyoga.csv', index_col='date')
+    rainfall = pd.read_csv(f'{SETTINGS.historic_dir}/rainfall.csv', index_col='date')
+    teleconnections = pd.read_csv(f'{SETTINGS.historic_dir}/teleconnections.csv', index_col='date')
+    inundation_temporal_scaled = pd.read_csv(SETTINGS.inundation_temporal_scaled, index_col='date')
+    gridded_rainfall_temporal = pd.read_csv(f'{SETTINGS.historic_dir}/gridded_rainfall_temporal.csv', index_col='date')
+    gridded_rainfall_cumulative_temporal = pd.read_csv(f'{SETTINGS.historic_dir}/gridded_rainfall_cumulative_temporal.csv', index_col='date')
+    gridded_moisture_temporal = pd.read_csv(f'{SETTINGS.historic_dir}/gridded_moisture_temporal.csv', index_col='date')
 
     # Calculate inundation delta
-    inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')
+    inundation_temporal_unscaled = pd.read_csv(SETTINGS.inundation_temporal_unscaled, index_col='date')
     inundation_temporal_delta = inundation_temporal_unscaled[['percent_inundation']].diff()
     inundation_temporal_delta.columns = ['inundation_delta']
 
@@ -74,7 +78,7 @@ def export_graphs_all_vars(data, explainer_vars):
         raise ValueError("Dataframe is empty after date conversion/cleaning.")
 
     # --- locate most recent subfolder inside /predictions by folder name date or fallback to ctime ---
-    predictions_root = "predictions"
+    predictions_root = SETTINGS.predictions_dir
     if not os.path.isdir(predictions_root):
         raise FileNotFoundError("No 'predictions' folder found in working directory.")
 

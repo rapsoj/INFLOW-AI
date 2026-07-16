@@ -26,6 +26,10 @@ from matplotlib.lines import Line2D
 import zipfile
 from processing.data_cleaning import process_inundation
 from processing import cleaning_utils
+from inflow_ai.settings import get_settings
+
+
+SETTINGS = get_settings()
 
 # Configure logging
 logging.basicConfig(
@@ -49,11 +53,11 @@ def generate_deployment_sequences_in_memory(
     inundation_file_path,
     rainfall_file_path,
     moisture_file_path,
-    static_dir='data/maps',
-    patch_size=64,
-    stride=32,
-    sequence_length=6,
-    forecast_length=6,
+    static_dir=None,
+    patch_size=None,
+    stride=None,
+    sequence_length=None,
+    forecast_length=None,
     num_timesteps=1):
     """
     Generates deployment-ready spatial sequences (in memory) for the last available time slices.
@@ -62,6 +66,17 @@ def generate_deployment_sequences_in_memory(
         X: np.ndarray of shape (N, sequence_length, 5, patch_size, patch_size)
         indices: np.ndarray of shape (N, 3) where each row is (t, y, x)
     """
+
+    if static_dir is None:
+        static_dir = SETTINGS.maps_dir
+    if patch_size is None:
+        patch_size = SETTINGS.patch_size
+    if stride is None:
+        stride = SETTINGS.stride
+    if sequence_length is None:
+        sequence_length = SETTINGS.sequence_length
+    if forecast_length is None:
+        forecast_length = SETTINGS.forecast_length
 
     inun_len, rain_len, moist_len = check_file_lengths(
         inundation_file_path, rainfall_file_path, moisture_file_path
@@ -161,7 +176,9 @@ def crop_borders(arr, border=4):
     return arr[:, border:-border, border:-border, :]
 
 
-def load_trained_model(model_path, gamma=3.0, alpha=0.95):
+def load_trained_model(model_path=None, gamma=3.0, alpha=0.95):
+    if model_path is None:
+        model_path = SETTINGS.spatial_model
     logger.info(f"Loading model from: {model_path}")
     model = load_model(
         model_path,
@@ -223,14 +240,25 @@ def reconstruct_maps(y_pred, indices, full_shape, border=4):
 
 
 def run_inference_pipeline(
-    model_path='model/spatial_model.keras',
-    inundation_file_path='data/historic/inundation.h5',
-    rainfall_file_path='data/historic/gridded_rainfall.h5',
-    moisture_file_path='data/historic/gridded_moisture.h5',
-    static_dir='data/maps',
+    model_path=None,
+    inundation_file_path=None,
+    rainfall_file_path=None,
+    moisture_file_path=None,
+    static_dir=None,
     full_shape=(1125, 1204),
-    border=4
+    border=None
 ):
+    if inundation_file_path is None:
+        inundation_file_path = f"{SETTINGS.historic_dir}/inundation.h5"
+    if rainfall_file_path is None:
+        rainfall_file_path = f"{SETTINGS.historic_dir}/gridded_rainfall.h5"
+    if moisture_file_path is None:
+        moisture_file_path = f"{SETTINGS.historic_dir}/gridded_moisture.h5"
+    if static_dir is None:
+        static_dir = SETTINGS.maps_dir
+    if border is None:
+        border = SETTINGS.border
+
     model = load_trained_model(model_path)
 
     X, indices = generate_deployment_sequences_in_memory(
@@ -245,10 +273,17 @@ def run_inference_pipeline(
     return maps
 
 
-def load_spatial_ref(inundation_path="data/downloads/inundation_masks/20250211.tif",
-                     catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp",
-                     download_path='data/downloads/inundation_masks',
+def load_spatial_ref(inundation_path=None,
+                     catchments_path=None,
+                     download_path=None,
                      inundation_file="20250211.tif"):
+
+      if inundation_path is None:
+          inundation_path = f"{SETTINGS.downloads_dir}/inundation_masks/20250211.tif"
+      if catchments_path is None:
+          catchments_path = f"{SETTINGS.maps_dir}/inflow_catchments/INFLOW_all_cmts.shp"
+      if download_path is None:
+          download_path = f"{SETTINGS.downloads_dir}/inundation_masks"
 
       # Process the new TIF files
       with rasterio.open(inundation_path) as src:
@@ -782,7 +817,9 @@ def plot_flood_change_map(
     return fig
 
 
-def load_latest_prediction_csv(base_path="predictions"):
+def load_latest_prediction_csv(base_path=None):
+    if base_path is None:
+        base_path = SETTINGS.predictions_dir
     subdirs = [os.path.join(base_path, d) for d in os.listdir(base_path)
                if os.path.isdir(os.path.join(base_path, d))]
     if not subdirs:
@@ -830,7 +867,7 @@ def export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder
   
     from tempfile import TemporaryDirectory
 
-    zip_path = FilePath(f"predictions/{folder_title}/spatial_predictions/flood_prediction_spatial_data.zip")
+    zip_path = SETTINGS.spatial_output_dir(folder_title) / "flood_prediction_spatial_data.zip"
     with TemporaryDirectory() as temp_dir:
         temp_path = FilePath(temp_dir)
 
@@ -868,7 +905,7 @@ def export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder
 
         regions_gdf.to_file(temp_path / "admin_boundaries.shp")
 
-        pop_centres = gpd.read_file("data/maps/population_centres/hotosm_ssd_populated_places_points_shp.shp")
+        pop_centres = gpd.read_file(f"{SETTINGS.maps_dir}/population_centres/hotosm_ssd_populated_places_points_shp.shp")
         pop_centres = pop_centres[pop_centres['population'].notna()]
         pop_centres = pop_centres[pop_centres['population'].astype(int) >= 10000]
         pop_centres = pop_centres.to_crs(crs)
@@ -925,15 +962,15 @@ def run_full_spatial_analysis():
     }
 
     # Load spatial reference and current extent
-    with h5py.File('data/historic/inundation.h5', 'r') as f:
+    with h5py.File(f'{SETTINGS.historic_dir}/inundation.h5', 'r') as f:
         current_extent = f['inundation'][-1]
 
     transform, crs, regions_gdf, _ = load_spatial_ref()
 
     # Load transformation reference
-    inundation_path="data/downloads/inundation_masks/20250211.tif"
-    catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp"
-    download_path='data/downloads/inundation_masks'
+    inundation_path=f"{SETTINGS.downloads_dir}/inundation_masks/20250211.tif"
+    catchments_path=f"{SETTINGS.maps_dir}/inflow_catchments/INFLOW_all_cmts.shp"
+    download_path=f"{SETTINGS.downloads_dir}/inundation_masks"
     inundation_file="20250211.tif"
 
     # Process the new TIF files
@@ -951,7 +988,7 @@ def run_full_spatial_analysis():
         [inundation_file], download_path, catchments)
 
     # Create output directory
-    output_dir = FilePath(f"predictions/{folder_title}/spatial_predictions")
+    output_dir = SETTINGS.spatial_output_dir(folder_title)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Plot full country
@@ -984,8 +1021,8 @@ def run_full_spatial_analysis():
     export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder_title, metas, inundation_file='20250211.tif')
 
     # --- Exposure impact reporting for schools and hospitals ---
-    hospital_csv = 'data/maps/exposure/hospitals.csv'
-    school_csv = 'data/maps/exposure/schools.csv'
+    hospital_csv = f'{SETTINGS.maps_dir}/exposure/hospitals.csv'
+    school_csv = f'{SETTINGS.maps_dir}/exposure/schools.csv'
     
     impacted_dir = output_dir / "impacted_facilities"
     impacted_dir.mkdir(parents=True, exist_ok=True)

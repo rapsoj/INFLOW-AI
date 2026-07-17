@@ -4,7 +4,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # Import geospatial libraries
+import rasterio
 from rasterio.features import rasterize
+from rasterio.transform import Affine
+from rasterio.warp import reproject, Resampling
 import geopandas as gpd
 
 # Import machine learning libraries
@@ -27,6 +30,103 @@ MASK_REGIONS_REF_SHAPE = tuple(get_cfg("reference_grid.mask_regions.shape", [112
 MASK_REGIONS_REF_BOUNDS = tuple(
     get_cfg("reference_grid.mask_regions.bounds", [2260000.0, 433000.0, 3464000.0, 1558000.0])
 )
+
+
+def _reference_transform_affine():
+    """Return the configured static reference transform as an Affine object."""
+    return Affine(*MASK_REGIONS_REF_TRANSFORM)
+
+
+def rasterize_to_reference_grid(gdf, all_touched=True, dtype=np.uint8):
+    """
+    Rasterize geometries directly on the static reference grid.
+
+    Parameters:
+    - gdf: GeoDataFrame
+        Input geometries to rasterize.
+    - all_touched: bool
+        Whether all touched pixels are burned in.
+    - dtype: numpy dtype
+        Output dtype for the rasterized mask.
+
+    Returns:
+    - ndarray
+        2D mask in reference grid where geometry pixels are 1 and other pixels are 0.
+    """
+    ref_crs = MASK_REGIONS_REF_CRS
+
+    if gdf.crs != ref_crs:
+        gdf = gdf.to_crs(ref_crs)
+
+    return rasterize(
+        [(geom, 1) for geom in gdf.geometry],
+        out_shape=MASK_REGIONS_REF_SHAPE,
+        transform=MASK_REGIONS_REF_TRANSFORM,
+        fill=0,
+        all_touched=all_touched,
+        dtype=dtype,
+    )
+
+
+def align_raster_to_reference_grid(src, src_band=1, resampling=Resampling.nearest, dst_fill=0):
+    """
+    Reproject and resample any georeferenced raster band to the static reference grid.
+
+    This aligns by CRS and writes directly into the configured reference extent,
+    transform, and shape, ensuring all outputs share identical footprint and grid.
+
+    Parameters:
+    - src: rasterio.io.DatasetReader
+        Open raster dataset.
+    - src_band: int
+        Source band index.
+    - resampling: rasterio.warp.Resampling
+        Resampling method for reprojection.
+    - dst_fill: int or float
+        Fill value for pixels outside source coverage.
+
+    Returns:
+    - ndarray
+        2D aligned array in the static reference grid.
+    """
+    dst = np.full(MASK_REGIONS_REF_SHAPE, dst_fill, dtype=src.dtypes[src_band - 1])
+
+    reproject(
+        source=rasterio.band(src, src_band),
+        destination=dst,
+        src_transform=src.transform,
+        src_crs=src.crs,
+        dst_transform=_reference_transform_affine(),
+        dst_crs=MASK_REGIONS_REF_CRS,
+        src_nodata=src.nodata,
+        dst_nodata=dst_fill,
+        resampling=resampling,
+    )
+
+    return dst
+
+
+def align_and_mask_raster_to_reference_grid(src, mask_gdf, src_band=1, dst_fill=0):
+    """
+    Align raster to reference grid and apply a polygon mask in that same grid.
+
+    Parameters:
+    - src: rasterio.io.DatasetReader
+        Open raster dataset.
+    - mask_gdf: GeoDataFrame
+        Mask geometries (e.g., catchments).
+    - src_band: int
+        Source band index.
+    - dst_fill: int or float
+        Fill value outside source and mask coverage.
+
+    Returns:
+    - ndarray
+        2D aligned+masked array in the static reference grid.
+    """
+    aligned = align_raster_to_reference_grid(src=src, src_band=src_band, dst_fill=dst_fill)
+    mask = rasterize_to_reference_grid(mask_gdf, all_touched=True, dtype=np.uint8)
+    return np.where(mask == 1, aligned, dst_fill)
 
 ADMIN0_PATH = get_cfg(
     "paths.maps.admin0",

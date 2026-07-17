@@ -14,7 +14,6 @@ import pandas as pd
 # Import geospatial libraries
 import geopandas as gpd
 import rasterio
-from rasterio.mask import mask as rasterio_mask
 
 # Import client libraries
 import requests
@@ -342,7 +341,7 @@ def reproject_to_raster_crs(shapefile, raster_path):
 
 def process_and_clip_rasters(tif_files, folder_path, catchments):
     """
-    Clip and collect metadata for each raster file in a folder.
+    Align, mask, and collect metadata for each raster file in a folder.
 
     Parameters:
         tif_files (list): List of TIF file names.
@@ -350,7 +349,7 @@ def process_and_clip_rasters(tif_files, folder_path, catchments):
         catchments (GeoDataFrame): GeoDataFrame of the catchment areas for clipping.
 
     Returns:
-        tuple: Arrays of clipped rasters, list of file names, and metadata dictionary.
+        tuple: Arrays of aligned rasters, list of file names, and metadata dictionary.
     """
     clipped_tif_files = []
     tif_file_names = []
@@ -361,23 +360,21 @@ def process_and_clip_rasters(tif_files, folder_path, catchments):
 
         try:
             with rasterio.open(file_path) as src:
-                clipped, clipped_transform = rasterio_mask(src, catchments.geometry, crop=True)
-                clipped_meta = src.meta.copy()
-                clipped_meta.update({
-                    "driver": "GTiff",
-                    "height": clipped.shape[1],
-                    "width": clipped.shape[2],
-                    "transform": clipped_transform
-                })
+                aligned_masked = cleaning_utils.align_and_mask_raster_to_reference_grid(
+                    src=src,
+                    mask_gdf=catchments,
+                    src_band=1,
+                    dst_fill=0,
+                )
 
-                clipped_tif_files.append(clipped[0])
+                clipped_tif_files.append(aligned_masked)
                 tif_file_names.append(file_name)
                 spatial_metadata[file_name] = {
-                    "crs": src.crs,
-                    "transform": clipped_transform,
-                    "height": clipped.shape[1],
-                    "width": clipped.shape[2],
-                    "bounds": src.bounds
+                    "crs": cleaning_utils.MASK_REGIONS_REF_CRS,
+                    "transform": cleaning_utils.MASK_REGIONS_REF_TRANSFORM,
+                    "height": cleaning_utils.MASK_REGIONS_REF_SHAPE[0],
+                    "width": cleaning_utils.MASK_REGIONS_REF_SHAPE[1],
+                    "bounds": cleaning_utils.MASK_REGIONS_REF_BOUNDS,
                 }
         except Exception as e:
             logging.error(f"Error processing file {file_name}: {e}")
@@ -675,8 +672,6 @@ def update_inundation(h5_file_path=VIIRS_H5_PATH,
 
         # Process the new TIF files
         catchments = load_shapefile(INFLOW_CATCHMENTS_PATH)
-        first_raster_path = os.path.join(download_path, sorted_files[0])
-        catchments = reproject_to_raster_crs(catchments, first_raster_path)
 
         # Process rasters and gather new data
         new_clipped_tif_files, new_file_names, _ = process_and_clip_rasters(new_files, download_path, catchments)

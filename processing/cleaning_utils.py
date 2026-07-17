@@ -4,13 +4,42 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # Import geospatial libraries
-import rasterio
 from rasterio.features import rasterize
-from rasterio.mask import mask
 import geopandas as gpd
 
 # Import machine learning libraries
 from sklearn.linear_model import LinearRegression
+
+# Import config
+from .config import get_cfg
+
+
+# -----------------------------------------------------------------------------
+# Static reference grid for region masking
+# Derived from: data/downloads/inundation_masks_modis/20020801.tif
+# with catchment crop applied using data/maps/inflow_catchments/INFLOW_all_cmts.shp
+# -----------------------------------------------------------------------------
+MASK_REGIONS_REF_CRS = get_cfg("reference_grid.mask_regions.crs", "EPSG:6933")
+MASK_REGIONS_REF_TRANSFORM = tuple(
+    get_cfg("reference_grid.mask_regions.transform", [1000.0, 0.0, 2260000.0, 0.0, -1000.0, 1558000.0])
+)
+MASK_REGIONS_REF_SHAPE = tuple(get_cfg("reference_grid.mask_regions.shape", [1125, 1204]))
+MASK_REGIONS_REF_BOUNDS = tuple(
+    get_cfg("reference_grid.mask_regions.bounds", [2260000.0, 433000.0, 3464000.0, 1558000.0])
+)
+
+ADMIN0_PATH = get_cfg(
+    "paths.maps.admin0",
+    "data/maps/admin_boundaries/ssd_admbnda_adm0_imwg_nbs_20230829.shp",
+)
+ADMIN1_PATH = get_cfg(
+    "paths.maps.admin1",
+    "data/maps/admin_boundaries/ssd_admbnda_adm1_imwg_nbs_20230829.shp",
+)
+ABYEI_PATH = get_cfg(
+    "paths.maps.abyei",
+    "data/maps/abyei_region/ssd_admbnda_abyei_imwg_nbs_20180401.shp",
+)
 
 
 def get_dates_of_interest(start_date_str='2002-07-01', end_date_str=None):
@@ -122,9 +151,9 @@ def impute_missing_values(df, cols, regression_length=6):
     
     
 # Define function to extract borders of South Sudan
-def extract_regions(admin0_path='data/maps/admin_boundaries/ssd_admbnda_adm0_imwg_nbs_20230829.shp',
-                    admin1_path='data/maps/admin_boundaries/ssd_admbnda_adm1_imwg_nbs_20230829.shp',
-                    abyei_region_path='data/maps/abyei_region/ssd_admbnda_abyei_imwg_nbs_20180401.shp'):
+def extract_regions(admin0_path=ADMIN0_PATH,
+                    admin1_path=ADMIN1_PATH,
+                    abyei_region_path=ABYEI_PATH):
     """
     Extract South Sudan regions for use in clipping tif files.
 
@@ -188,7 +217,7 @@ def extract_regions(admin0_path='data/maps/admin_boundaries/ssd_admbnda_adm0_imw
     
     
 # Define function to mask regions
-def mask_regions(gdf, data, ref_path='data/downloads/inundation_masks/20241111.tif', catchments_path='data/maps/inflow_catchments/INFLOW_all_cmts.shp'):
+def mask_regions(gdf, data):
     """
     Mask tif files using a polygon. 
 
@@ -197,32 +226,19 @@ def mask_regions(gdf, data, ref_path='data/downloads/inundation_masks/20241111.t
         Polygon with target geometry for masking.
     - data: array
         3D array with values to be masked.
-    - ref_path: str
-        Path to reference file for aligning array.
-    - catchments_path: str
-        Path catchments of interest for cropping polygon.
+    Uses static reference grid config derived from
+    data/downloads/inundation_masks_modis/20020801.tif (catchment-cropped).
 
     Returns:
     - masked_regions: array
         A 3D array of regions with areas outside the target polygon set to nan.
     """
     
-    # Load the catchments shapefile using GeoPandas
-    catchments = gpd.read_file(catchments_path)
-    
-    # Read the raster file to get the CRS and transform
-    with rasterio.open(ref_path) as src:
-        ref_crs = src.crs  # Get raster CRS
-    
-        # Reproject catchments to match raster CRS if needed
-        if catchments.crs != ref_crs:
-            catchments = catchments.to_crs(ref_crs)
-        
-        # Get the geometry of the catchments as a list of polygons
-        catchment_geom = catchments.geometry.values  # This returns a list of geometries
-        
-        # Clip the raster using the catchment geometries
-        ref_image, ref_transform = mask(src, catchment_geom, crop=True)
+    ref_crs = MASK_REGIONS_REF_CRS
+
+    # Affine transform tuple: (a, b, c, d, e, f)
+    ref_transform = MASK_REGIONS_REF_TRANSFORM
+    ref_shape = MASK_REGIONS_REF_SHAPE
     
     # Ensure gdf boundary matches CRS of raster
     if gdf.crs != ref_crs:
@@ -231,7 +247,7 @@ def mask_regions(gdf, data, ref_path='data/downloads/inundation_masks/20241111.t
     # Rasterize gdf boundary: Inside = 1, Outside = 0
     gdf_mask = rasterize(
         [(geom, 1) for geom in gdf.geometry],
-        out_shape=np.squeeze(ref_image, axis=0).shape,
+        out_shape=ref_shape,
         transform=ref_transform,
         fill=0,  # Outside polygon
         all_touched=True,  # Ensures full coverage

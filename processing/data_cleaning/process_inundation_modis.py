@@ -22,6 +22,7 @@ from tqdm import tqdm
 
 # Import cleaning utils
 from .. import cleaning_utils
+from ..config import get_cfg
 
 # Import statistics
 from data.stats import gridded_data_stats
@@ -29,6 +30,27 @@ from data.stats import gridded_data_stats
 # Configure logging
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+MODIS_BASE_URL = get_cfg(
+    "sources.modis_base_url",
+    "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask",
+)
+MODIS_DOWNLOAD_PATH = get_cfg("paths.downloads.inundation_modis", "data/downloads/inundation_masks_modis")
+MODIS_H5_PATH = get_cfg("paths.historic.inundation_h5", "data/historic/inundation.h5")
+MODIS_TEMPORAL_UNSCALED_PATH = get_cfg(
+    "paths.historic.inundation_temporal_unscaled",
+    "data/historic/inundation_temporal_unscaled.csv",
+)
+MODIS_TEMPORAL_SCALED_PATH = get_cfg(
+    "paths.historic.inundation_temporal_scaled",
+    "data/historic/inundation_temporal_scaled.csv",
+)
+MODIS_DSET_NAME = "inundation"
+STUDY_START_DATE = get_cfg("runtime.study_start_date", "2002-07-01")
+INFLOW_CATCHMENTS_PATH = get_cfg(
+    "paths.maps.catchments",
+    "data/maps/inflow_catchments/INFLOW_all_cmts.shp",
+)
 
 
 def read_stats(region='all'):
@@ -41,7 +63,7 @@ def read_stats(region='all'):
     return inundation_mean, inundation_std
     
 
-def download_inundation(dates_list, download_path='data/downloads/inundation_masks'):
+def download_inundation(dates_list, download_path=MODIS_DOWNLOAD_PATH):
     """
     Download inundation data for the specified dates.
 
@@ -49,7 +71,7 @@ def download_inundation(dates_list, download_path='data/downloads/inundation_mas
         dates_list (list): List of dates for which to download inundation data.
         download_path (str): Directory path to save downloaded TIF files.
     """
-    base_url = "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask"
+    base_url = MODIS_BASE_URL
     if not os.path.exists(download_path):
         os.makedirs(download_path)
 
@@ -171,7 +193,7 @@ def process_and_clip_rasters(tif_files, folder_path, catchments):
     return clipped_tif_files, tif_file_names, spatial_metadata
 
 
-def get_historic_dates(data_path='data/historic/inundation_temporal_unscaled.csv'):
+def get_historic_dates(data_path=MODIS_TEMPORAL_UNSCALED_PATH):
     """
     Get list of historic dates from pre-downloaded data.
 
@@ -187,7 +209,7 @@ def get_historic_dates(data_path='data/historic/inundation_temporal_unscaled.csv
         return []
 
 
-def download_new_inundation(download_path='data/downloads/inundation_masks', burn_in_steps=18):
+def download_new_inundation(download_path=MODIS_DOWNLOAD_PATH, burn_in_steps=18):
     """
     Download inundation data for the last `burn_in_steps` timesteps (to refresh them)
     plus any new dates up to the current date.
@@ -207,7 +229,7 @@ def download_new_inundation(download_path='data/downloads/inundation_masks', bur
             start_date = historic_dates[0]
     else:
         # Default if no history exists
-        start_date = "2002-07-01"
+        start_date = STUDY_START_DATE
 
     # Get all dates of interest (last N + up to today)
     new_dates = cleaning_utils.get_dates_of_interest(
@@ -272,10 +294,10 @@ def crop_historic_data(file_path, temporal_data_path, temporal_data_path_scaled)
             print("✅ No cropping needed. Temporal lengths already match.")
         
         
-def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
-                        temporal_data_path="data/historic/inundation_temporal_unscaled.csv",
-                        temporal_data_path_scaled="data/historic/inundation_temporal_scaled.csv",
-                        dset_name="inundation",
+def remove_burn_in_data(h5_file_path=MODIS_H5_PATH,
+                        temporal_data_path=MODIS_TEMPORAL_UNSCALED_PATH,
+                        temporal_data_path_scaled=MODIS_TEMPORAL_SCALED_PATH,
+                        dset_name=MODIS_DSET_NAME,
                         burn_in_steps=18):
     """
     Remove the last `burn_in_steps` dekads from saved MODIS data 
@@ -333,9 +355,9 @@ def remove_burn_in_data(h5_file_path="data/historic/inundation.h5",
     print(f"Removed last {burn_in_steps} timesteps from HDF5 and temporal CSVs (sorted by date).")
         
 
-def update_inundation(download_path='data/downloads/inundation_masks',
-                      temporal_data_path='data/historic/inundation_temporal_unscaled.csv',
-                      temporal_data_path_scaled='data/historic/inundation_temporal_scaled.csv'):
+def update_inundation(download_path=MODIS_DOWNLOAD_PATH,
+                      temporal_data_path=MODIS_TEMPORAL_UNSCALED_PATH,
+                      temporal_data_path_scaled=MODIS_TEMPORAL_SCALED_PATH):
     """
     Process newly downloaded inundation data and combine it with existing data.
 
@@ -345,13 +367,13 @@ def update_inundation(download_path='data/downloads/inundation_masks',
         temporal_data_path_scaled (str): Directory path of pre-downloaded scaled temporal data.
     """
     try:
-        with h5py.File('data/historic/inundation.h5', 'r') as f:
-            inundation_historic = f['inundation']
+        with h5py.File(MODIS_H5_PATH, 'r') as f:
+            inundation_historic = f[MODIS_DSET_NAME]
             logging.info(f"Existing inundation data shape: {inundation_historic.shape}")
             
         # Crop historic data if historic spatial and temporal data are not the same size   
         crop_historic_data(
-            file_path="data/historic/inundation.h5",
+            file_path=MODIS_H5_PATH,
             temporal_data_path=temporal_data_path,
             temporal_data_path_scaled=temporal_data_path_scaled
         )
@@ -376,8 +398,7 @@ def update_inundation(download_path='data/downloads/inundation_masks',
             return
 
         # Process the new TIF files
-        catchments_path = "data/maps/inflow_catchments/INFLOW_all_cmts.shp"
-        catchments = load_shapefile(catchments_path)
+        catchments = load_shapefile(INFLOW_CATCHMENTS_PATH)
         first_raster_path = os.path.join(download_path, sorted_files[0])
         catchments = reproject_to_raster_crs(catchments, first_raster_path)
 
@@ -412,8 +433,8 @@ def update_inundation(download_path='data/downloads/inundation_masks',
             inundation_temporal_scaled[f'percent_inundation_{region_code}'] = scaled_region_temporal_data
 
         # Combine existing and new inundation data
-        with h5py.File('data/historic/inundation.h5', 'a') as hdf:
-            dset = hdf['inundation']
+        with h5py.File(MODIS_H5_PATH, 'a') as hdf:
+            dset = hdf[MODIS_DSET_NAME]
             old_dataset_length = dset.shape[0]
             dset.resize(dset.shape[0] + len(new_clipped_tif_files), axis=0)
             dset[-len(new_clipped_tif_files):] = new_clipped_tif_files
@@ -427,9 +448,9 @@ def update_inundation(download_path='data/downloads/inundation_masks',
         
         # Save the updated temporal data
         inundation_temporal_new['date'] = pd.to_datetime(inundation_temporal_new['date'], format='%Y-%m-%d')
-        inundation_temporal_new.sort_values("date").to_csv('data/historic/inundation_temporal_unscaled.csv', index=False)
+        inundation_temporal_new.sort_values("date").to_csv(MODIS_TEMPORAL_UNSCALED_PATH, index=False)
         inundation_temporal_new_scaled['date'] = pd.to_datetime(inundation_temporal_new_scaled['date'], format='%Y-%m-%d')
-        inundation_temporal_new_scaled.sort_values("date").to_csv('data/historic/inundation_temporal_scaled.csv', index=False)
+        inundation_temporal_new_scaled.sort_values("date").to_csv(MODIS_TEMPORAL_SCALED_PATH, index=False)
             
     except Exception as e:
         logging.error(f"Error processing new inundation data: {e}")

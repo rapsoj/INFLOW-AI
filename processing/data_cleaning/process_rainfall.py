@@ -13,12 +13,18 @@ from sklearn.preprocessing import StandardScaler
 
 # Import cleaning utils
 from .. import cleaning_utils
+from ..config import get_cfg
 
 # Define constants
-URL = "https://gws-access.jasmin.ac.uk/public/tamsat/INFLOW/rainfall/rfe_time-series/combined/rfe_19830101-present_Lake-Victoria.csv"
-FOLDER_PATH = "data/downloads/tamsat"
+URL = get_cfg(
+    "sources.rainfall_url",
+    "https://gws-access.jasmin.ac.uk/public/tamsat/INFLOW/rainfall/rfe_time-series/combined/rfe_19830101-present_Lake-Victoria.csv",
+)
+FOLDER_PATH = get_cfg("paths.downloads.tamsat", "data/downloads/tamsat")
 FILE_NAME = "rainfall.csv"
 FILE_PATH = os.path.join(FOLDER_PATH, FILE_NAME)
+RAINFALL_OUTPUT_PATH = get_cfg("paths.historic.rainfall", "data/historic/rainfall.csv")
+STUDY_START_DATE = get_cfg("runtime.study_start_date", "2002-07-01")
 
 
 def download_rainfall_data(url=URL, folder_path=FOLDER_PATH, file_path=FILE_PATH):
@@ -244,14 +250,14 @@ def update_rainfall():
         rainfall = calculate_cumulative_values(rainfall, ['TAMSAT', 'CHIRPS'])
 
         # Filter to study period
-        min_date = pd.to_datetime('2002-07-01')
+        min_date = pd.to_datetime(STUDY_START_DATE)
         rainfall = rainfall[rainfall.index >= min_date]
 
         # Scale the data
         rainfall = scale_data(rainfall)
 
         # Save the processed data
-        rainfall.to_csv('data/historic/rainfall.csv', index=True)
+        rainfall.to_csv(RAINFALL_OUTPUT_PATH, index=True)
         print("Rainfall data processing completed successfully.")
 
     except Exception as e:

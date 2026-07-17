@@ -11,6 +11,7 @@ import loguru
 
 # Import cleaning utils
 from .. import cleaning_utils
+from ..config import get_cfg
 
 # Import teleconnections download files
 from processing.data_cleaning.download_teleconnections import oni
@@ -18,6 +19,10 @@ from processing.data_cleaning.download_teleconnections import sst
 from processing.data_cleaning.download_teleconnections import soi
 from processing.data_cleaning.download_teleconnections import mjo
 from processing.data_cleaning.download_teleconnections import dmi
+
+
+TELECONNECTIONS_OUTPUT_PATH = get_cfg("paths.historic.teleconnections", "data/historic/teleconnections.csv")
+TELECONNECTIONS_MIN_DATE = get_cfg("runtime.teleconnections.min_date", "2002-07-01")
 
 
 def add_date_columns(teleconnections_dfs):
@@ -220,12 +225,12 @@ def update_teleconnections():
     teleconnections = cleaning_utils.impute_missing_values(teleconnections, teleconnections.columns)
     
     # Filter dates to study period
-    min_date = pd.to_datetime('2002-07-01')
+    min_date = pd.to_datetime(TELECONNECTIONS_MIN_DATE)
     teleconnections = teleconnections[teleconnections.index >= min_date]
 
     # Scale the teleconnections data
     teleconnections = scale_data(teleconnections)
 
     # Save the processed data
-    teleconnections.to_csv('data/historic/teleconnections.csv', index=True)
+    teleconnections.to_csv(TELECONNECTIONS_OUTPUT_PATH, index=True)
     print("Teleconnections data processing completed successfully.")

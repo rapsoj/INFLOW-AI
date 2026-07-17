@@ -10,7 +10,7 @@ from processing.data_cleaning import process_albert
 from processing.data_cleaning import process_kyoga
 from processing.data_cleaning import process_rainfall
 from processing.data_cleaning import process_teleconnections
-from processing.data_cleaning import process_inundation
+from processing.data_cleaning import process_inundation_modis
 from processing.data_cleaning import process_gridded_rainfall
 from processing.data_cleaning import process_gridded_rainfall_cumulative
 from processing.data_cleaning import process_gridded_moisture
@@ -94,7 +94,7 @@ def update_data():
 		process_kyoga.update_kyoga()
 		process_rainfall.update_rainfall()
 		process_teleconnections.update_teleconnections()
-		process_inundation.update_inundation()
+		process_inundation_modis.update_inundation()
 		process_gridded_rainfall.update_gridded_rainfall()
 		process_gridded_rainfall_cumulative.update_gridded_rainfall_cumulative()
 		process_gridded_moisture.update_gridded_moisture()

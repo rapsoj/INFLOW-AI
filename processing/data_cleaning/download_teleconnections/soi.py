@@ -10,10 +10,11 @@ import typer
 
 import pandas as pd
 
-SOURCE_URL = "https://www.cpc.ncep.noaa.gov/data/indices/soi"
-FILE_PATH_PARTS = ("data/downloads/teleconnections", "soi.txt")
-DATA_ROOT = Path(os.getcwd()) # Modify as needed
-FOLDER_PATH = os.path.join(DATA_ROOT, 'data/downloads/teleconnections') # Modify as needed
+from ...config import get_cfg
+
+SOURCE_URL = get_cfg("sources.teleconnections.soi", "https://www.cpc.ncep.noaa.gov/data/indices/soi")
+FOLDER_PATH = Path(get_cfg("paths.downloads.teleconnections", "data/downloads/teleconnections"))
+SOI_FILE_PATH = FOLDER_PATH / "soi.txt"
 
 # Dictionary to map month abbreviations to numeric values
 MONTH_TO_NUM_UP = {
@@ -27,7 +28,7 @@ def download_soi(
     """Download Southern Oscillation Index data."""
     logger.info("Downloading SOI data...")
     response = requests.get(SOURCE_URL)
-    out_file = DATA_ROOT.joinpath(*FILE_PATH_PARTS)
+    out_file = SOI_FILE_PATH
     logger.info(f"Output file path is {out_file}")
     if skip_existing and out_file.exists():
         logger.info("File exists. Skipping.")
@@ -43,7 +44,7 @@ def read_full_soi_data_anomaly(path: Path | None = None) -> pd.DataFrame:
     subset by time."""
     # Raw data file contains two fixed-width files: first is not standardized, and second is
     # standardized. The standardized values are the most common representation of SOI.
-    path = DATA_ROOT / 'data/downloads/teleconnections' / 'soi.txt'
+    path = SOI_FILE_PATH
     with path.open("r") as fp:
         # Get line number that contains "STANDARDIZED DATA"
         skip_lines = []
@@ -71,7 +72,7 @@ def read_full_soi_data(path: Path | None = None) -> pd.DataFrame:
     subset by time."""
     # Raw data file contains two fixed-width files: first is not standardized, and second is
     # standardized. The standardized values are the most common representation of SOI.
-    path = DATA_ROOT / 'data/downloads/teleconnections' / 'soi.txt'
+    path = SOI_FILE_PATH
     with path.open("r") as fp:
         # Get line number that contains "STANDARDIZED DATA"
         line_no = 0

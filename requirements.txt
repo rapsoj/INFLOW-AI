@@ -11,6 +11,7 @@ pandas==2.2.2
 py_hydroweb==1.0.2
 rasterio==1.4.3
 requests==2.32.4
+PyYAML>=6.0.1
 scikit-learn==1.6.1
 scipy>=1.14.1
 shapely

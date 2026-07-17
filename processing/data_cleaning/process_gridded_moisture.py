@@ -374,7 +374,7 @@ def crop_historic_data(file_path, temporal_data_path):
 
 
 def process_new_gridded_moisture(moisture_dekads_folder,
-                                 sample_tif_folder='data/downloads/inundation_masks',
+                                 sample_tif_folder='data/downloads/inundation_masks_modis',
                                  catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp"):
     """
     Process newly downloaded gridded moisture data.

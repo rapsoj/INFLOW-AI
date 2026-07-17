@@ -11,12 +11,14 @@ import typer
 
 import pandas as pd
 
-SOURCE_URL = (
-    "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/daily_mjo_index/proj_norm_order.ascii"
+from ...config import get_cfg
+
+SOURCE_URL = get_cfg(
+    "sources.teleconnections.mjo",
+    "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/daily_mjo_index/proj_norm_order.ascii",
 )
-FILE_PATH_PARTS = ("data/downloads/teleconnections", "mjo.txt")
-DATA_ROOT = Path(os.getcwd()) # Modify as needed
-FOLDER_PATH = os.path.join(DATA_ROOT, 'data/downloads/teleconnections') # Modify as needed
+FOLDER_PATH = Path(get_cfg("paths.downloads.teleconnections", "data/downloads/teleconnections"))
+MJO_FILE_PATH = FOLDER_PATH / "mjo.txt"
 
 
 def download_mjo(
@@ -25,7 +27,7 @@ def download_mjo(
     """Download Madden-Julian Oscillation indices."""
     logger.info("Downloading MJO data...")
     response = requests.get(SOURCE_URL)
-    out_file = DATA_ROOT.joinpath(*FILE_PATH_PARTS)
+    out_file = MJO_FILE_PATH
     logger.info(f"Output file path is {out_file}")
     if skip_existing and out_file.exists():
         logger.info("File exists. Skipping.")
@@ -39,7 +41,7 @@ def download_mjo(
 
 def import_mjo():
     # Import mjo dataset
-    df_mjo = pd.read_table(os.path.join(FOLDER_PATH, "mjo.txt"), delim_whitespace=True, skiprows=1)
+    df_mjo = pd.read_table(MJO_FILE_PATH, delim_whitespace=True, skiprows=1)
     return df_mjo
 
 

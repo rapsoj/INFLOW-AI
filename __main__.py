@@ -115,14 +115,13 @@ def create_dataframe():
 	kyoga = pd.read_csv('data/historic/kyoga.csv', index_col='date')
 	rainfall = pd.read_csv('data/historic/rainfall.csv', index_col='date')
 	teleconnections = pd.read_csv('data/historic/teleconnections.csv', index_col='date')
-	inundation_temporal_scaled = pd.read_csv('data/historic/inundation_temporal_scaled.csv', index_col='date')
+	inundation_temporal = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')
 	gridded_rainfall_temporal = pd.read_csv('data/historic/gridded_rainfall_temporal.csv', index_col='date')
 	gridded_rainfall_cumulative_temporal = pd.read_csv('data/historic/gridded_rainfall_cumulative_temporal.csv', index_col='date')
 	gridded_moisture_temporal = pd.read_csv('data/historic/gridded_moisture_temporal.csv', index_col='date')
 
 	# Calculate inundation delta
-	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')
-	inundation_temporal_delta = inundation_temporal_unscaled[['percent_inundation']].diff()
+	inundation_temporal_delta = inundation_temporal[['percent_inundation']].diff()
 	inundation_temporal_delta.columns = ['inundation_delta']
 
 	# Combine data into temporal dataframe
@@ -132,7 +131,7 @@ def create_dataframe():
 	    kyoga,
 	    rainfall,
 	    teleconnections,
-	    inundation_temporal_scaled.rename({'percent_inundation': 'inundation_temporal'}, axis=1)[['inundation_temporal']],
+	    inundation_temporal.rename({'percent_inundation': 'inundation_temporal'}, axis=1)[['inundation_temporal']],
 	    gridded_rainfall_temporal.rename({'rainfall': 'rainfall_3d_temporal'}, axis=1)[['rainfall_3d_temporal']],
 	    gridded_rainfall_cumulative_temporal.rename({'cumulative_rainfall': 'rainfall_cumulative'}, axis=1)[['rainfall_cumulative']],
 	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1)[['moisture_3d_temporal']],
@@ -305,7 +304,7 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_
 		monte_carlo (boolean): Whether Monte Carlo simulations are necessary to produce confidence intervals, if False, must provide values for upper and lower bounds.
 	"""
 	# Load unscaled temporal inundation data
-	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date').reindex(data.index)
+	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date').reindex(data.index)
 	inundation_temporal_unscaled = cleaning_utils.impute_missing_values(inundation_temporal_unscaled, inundation_temporal_unscaled.columns)
 	
 	# Load seasonal statistics
@@ -386,7 +385,7 @@ def print_trigger(inundation_pred, future_dates):
     folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
     
     # Format predictions data
-    inundation_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')[['percent_inundation']]
+	inundation_unscaled = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')[['percent_inundation']]
     
     # Export S-EAP trigger if activated 
     pred_max = np.max(inundation_pred[:, :], axis=1)
@@ -417,7 +416,7 @@ def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_uns
 	predictions = pd.DataFrame({'lower_bound_95': lower_bound_unscaled_inundation[0],
 	                            'percent_inundation': inundation_pred[0],
 	                            'upper_bound_95': upper_bound_unscaled_inundation[0]}, index=future_dates)
-	inundation_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')[['percent_inundation']]
+	inundation_unscaled = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')[['percent_inundation']]
 	predictions = pd.concat([inundation_unscaled, predictions])
 	 
 	# Define the folder path

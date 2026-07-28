@@ -41,7 +41,7 @@ def download_mjo(
 
 def import_mjo():
     # Import mjo dataset
-    df_mjo = pd.read_table(MJO_FILE_PATH, delim_whitespace=True, skiprows=1)
+    df_mjo = pd.read_table(MJO_FILE_PATH, sep=r"\s+", skiprows=1)
     return df_mjo
 
 

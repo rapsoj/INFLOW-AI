@@ -40,7 +40,7 @@ def download_dmi(
 
 def import_dmi():
     # Import dmi dataset
-    df_dmi = pd.read_table(DMI_FILE_PATH, delim_whitespace=True, skiprows=8)
+    df_dmi = pd.read_table(DMI_FILE_PATH, sep=r"\s+", skiprows=8)
     return df_dmi
 
 

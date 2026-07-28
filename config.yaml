@@ -2,6 +2,11 @@ sources:
   viirs_base_url: "https://edcftp.cr.usgs.gov/project/FEWSNET/spervez/Togofiles/SouthSudan/UofReading/Geotiffs/"
   modis_base_url: "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask"
   rainfall_url: "https://gws-access.jasmin.ac.uk/public/tamsat/INFLOW/rainfall/rfe_time-series/combined/rfe_19830101-present_Lake-Victoria.csv"
+  lake_levels:
+    albert_api_url: "https://hydroweb.next.theia-land.fr/api"
+    albert_api_key: "70s88Dpwc0UraJi9n4EouE7UXCbXzQJkSdCeT1cLNy4EcczioA"
+    victoria_url: "https://blueice.gsfc.nasa.gov/gwm/timeseries/lake000314.10d.2.txt"
+    kyoga_url: "https://blueice.gsfc.nasa.gov/gwm/timeseries/lake000398.10d.2.txt"
   teleconnections:
     oni: "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
     sst: "https://www.cpc.ncep.noaa.gov/data/indices/sstoi.indices"
@@ -11,19 +16,34 @@ sources:
 
 paths:
   downloads:
+    root: "data/downloads"
     inundation_modis: "data/downloads/inundation_masks_modis"
     inundation_viirs: "data/downloads/inundation_masks_viirs"
     teleconnections: "data/downloads/teleconnections"
     tamsat: "data/downloads/tamsat"
+    lake_levels: "data/downloads/lake_levels"
+    extracted_domain: "data/downloads/extracted_data/domain"
+    tamsat_rfe_daily: "data/downloads/tamsat/rfe/data/v3.1/daily"
+    tamsat_rfe_dekads: "data/downloads/tamsat/rfe/dekads"
+    tamsat_sm_daily: "data/downloads/tamsat/soil_moisture/data/v2.3.1/daily"
+    tamsat_sm_dekads: "data/downloads/tamsat/soil_moisture/dekads"
   historic:
-    inundation_h5: "data/historic/inundation.h5"
-    inundation_temporal_unscaled: "data/historic/inundation_temporal_unscaled.csv"
-    inundation_temporal_scaled: "data/historic/inundation_temporal_scaled.csv"
-    viirs_h5: "data/historic/viirs_inundation.h5"
-    viirs_temporal_unscaled: "data/historic/viirs_inundation_temporal_unscaled.csv"
-    viirs_temporal_scaled: "data/historic/viirs_inundation_temporal_scaled.csv"
+    inundation_h5: "data/historic/inundation_viirs.h5"
+    inundation_temporal: "data/historic/inundation_viirs_temporal.csv"
+    modis_temporal: "data/historic/inundation_modis_temporal.csv"
+    viirs_h5: "data/historic/inundation_viirs.h5"
+    viirs_temporal: "data/historic/inundation_viirs_temporal.csv"
     teleconnections: "data/historic/teleconnections.csv"
     rainfall: "data/historic/rainfall.csv"
+    albert: "data/historic/albert.csv"
+    victoria: "data/historic/victoria.csv"
+    kyoga: "data/historic/kyoga.csv"
+    gridded_rainfall_temporal: "data/historic/gridded_rainfall_temporal.csv"
+    gridded_rainfall_h5: "data/historic/gridded_rainfall.h5"
+    gridded_moisture_temporal: "data/historic/gridded_moisture_temporal.csv"
+    gridded_moisture_h5: "data/historic/gridded_moisture.h5"
+    gridded_rainfall_cumulative_temporal: "data/historic/gridded_rainfall_cumulative_temporal.csv"
+    gridded_rainfall_cumulative_h5: "data/historic/gridded_rainfall_cumulative.h5"
   maps:
     catchments: "data/maps/inflow_catchments/INFLOW_all_cmts.shp"
     admin0: "data/maps/admin_boundaries/ssd_admbnda_adm0_imwg_nbs_20230829.shp"
@@ -38,6 +58,17 @@ reference_grid:
     bounds: [2260000.0, 433000.0, 3464000.0, 1558000.0]
 
 runtime:
+  target_product: "viirs"
   study_start_date: "2002-07-01"
+  tamsat:
+    sm_version: "2.3.1"
+  lake_levels:
+    albert_bbox: [30.5, 1.5, 31.5, 2.5]
+    albert_collection: "HYDROWEB_LAKES_OPE"
+    albert_zip_path: "data/downloads/lake_levels/albert.zip"
+    temp_extraction_dir: "data/downloads/lake_levels/temp_extraction"
+    albert_target_paths:
+      - "HYDROWEB_LAKES_OPE/hydroprd_L_albert.txt"
+      - "HYDROWEB_LAKES_OPE/HYDROWEB_LAKES_OPE/hydroprd_L_albert.txt"
   teleconnections:
     min_date: "2002-07-01"

@@ -72,6 +72,13 @@ This program is a machine learning model designed to predict flood inundation co
 
 3. **Visualisation**: After execution, view the generated graphs and reports in the `/output` directory.
 
+4. **Run Ablation Experiments**:
+`python -m model.ablation.run_ablation --models random_forest,gradient_boosting,elastic_net --cutoff-dates 2025-12-31 --autoregressive-values yes,no --target-types raw,first_differenced,deseasonalised,seasonally_differenced,differenced_anomaly --inundation-products viirs,modis --seed 42`
+
+This writes:
+- model weights (`.pkl`) to `model/ablation/models/weights/`
+- experiment metadata and performance metrics to `model/ablation/ablation_experiment_log.csv`
+
 <img src="https://i.imgur.com/m8T8OQW.png" alt="Predictions compared with past year" width="600"/>
 
 <img src="https://i.imgur.com/NUFHPcr.png" alt="Predictions compared with past five years" width="600"/>
@@ -91,6 +98,49 @@ This program is a machine learning model designed to predict flood inundation co
 - Produces heatmaps and time-series plots of flood inundation predictions.
 6. **Output**: 
 - Saves prediction data and visualisations in the `/output` directory.
+
+---
+
+## Ablation Pipeline
+
+The repository now includes a dedicated ablation framework in `model/ablation/` with:
+
+- One class per model in its own Python file:
+  - `model/ablation/models/random_forest_model.py`
+  - `model/ablation/models/gradient_boosting_model.py`
+  - `model/ablation/models/elastic_net_model.py`
+- Corresponding serialized model weight files as `.pkl` artifacts in:
+  - `model/ablation/models/weights/`
+- Reproducibility controls:
+  - Global random seed set for `random`, `numpy`, and TensorFlow (if available)
+- Experiment tracking in a single CSV log:
+  - `model/ablation/ablation_experiment_log.csv`
+
+Each logged experiment row includes:
+
+- Ablation dimensions:
+  - `model_type`
+  - `training_cutoff_date`
+  - `autoregressive`
+  - `target_type` (`raw`, `first_differenced`, `deseasonalised`, `seasonally_differenced`, `differenced_anomaly`)
+  - `inundation_product` (`viirs` or `modis`)
+  - `seed`
+- Dataset properties:
+  - source path, row counts, feature count
+  - date range
+  - target mean/std
+  - dataset fingerprint hash
+- Performance metrics:
+  - `calibration`
+  - `twcrps`
+  - `mae`
+  - `rmse`
+  - `quantile_loss_95`
+  - `quantile_loss_99`
+  - `peak_precision`
+  - `peak_recall`
+  - `peak_auc`
+  - `peak_f1`
 
 
 ---

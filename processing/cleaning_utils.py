@@ -1,4 +1,6 @@
 # Import data manipulation libraries
+import os
+import calendar
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -106,7 +108,13 @@ def align_raster_to_reference_grid(src, src_band=1, resampling=Resampling.neares
     return dst
 
 
-def align_and_mask_raster_to_reference_grid(src, mask_gdf, src_band=1, dst_fill=0):
+def align_and_mask_raster_to_reference_grid(
+    src,
+    mask_gdf,
+    src_band=1,
+    dst_fill=0,
+    resampling=Resampling.nearest,
+):
     """
     Align raster to reference grid and apply a polygon mask in that same grid.
 
@@ -119,12 +127,19 @@ def align_and_mask_raster_to_reference_grid(src, mask_gdf, src_band=1, dst_fill=
         Source band index.
     - dst_fill: int or float
         Fill value outside source and mask coverage.
+    - resampling: rasterio.warp.Resampling
+        Resampling method used during reprojection.
 
     Returns:
     - ndarray
         2D aligned+masked array in the static reference grid.
     """
-    aligned = align_raster_to_reference_grid(src=src, src_band=src_band, dst_fill=dst_fill)
+    aligned = align_raster_to_reference_grid(
+        src=src,
+        src_band=src_band,
+        dst_fill=dst_fill,
+        resampling=resampling,
+    )
     mask = rasterize_to_reference_grid(mask_gdf, all_touched=True, dtype=np.uint8)
     return np.where(mask == 1, aligned, dst_fill)
 
@@ -142,17 +157,95 @@ ABYEI_PATH = get_cfg(
 )
 
 
-def get_dates_of_interest(start_date_str='2002-07-01', end_date_str=None):
+def resolve_target_product(target_product=None):
+    """Resolve target product from explicit argument or config."""
+    resolved = (target_product or get_cfg("runtime.target_product", "modis")).lower().strip()
+    if resolved not in {"modis", "viirs"}:
+        raise ValueError(f"Invalid target_product '{resolved}'. Expected 'modis' or 'viirs'.")
+    return resolved
+
+
+def _target_temporal_candidates(target_product):
+    """Return candidate temporal CSV paths for a target product in priority order."""
+    target_product = resolve_target_product(target_product)
+
+    if target_product == "viirs":
+        return [
+            get_cfg("paths.historic.viirs_temporal", "data/historic/inundation_viirs_temporal.csv"),
+            "data/historic/viirs_inundation_temporal.csv",
+            "data/historic/inundation_viirs_temporal.csv",
+        ]
+
+    return [
+        get_cfg("paths.historic.modis_temporal", "data/historic/inundation_modis_temporal.csv"),
+        get_cfg("paths.historic.inundation_temporal", "data/historic/inundation_temporal.csv"),
+        "data/historic/inundation_modis_temporal.csv",
+    ]
+
+
+def get_target_temporal_path(target_product=None):
+    """Get the best available temporal CSV path for the selected target product."""
+    candidates = _target_temporal_candidates(target_product)
+    for path in candidates:
+        if path and os.path.exists(path):
+            return path
+    return candidates[0]
+
+
+def get_target_start_date(target_product=None):
     """
-    Generate a list of dates between start_date_str and end_date_str where the day ends in '01', '11', or '21'.
+    Get the first available date from the selected target product temporal CSV.
+
+    For VIIRS data this prefers `period_start` and falls back to `date`.
+    For MODIS this prefers `date`.
+    """
+    target_product = resolve_target_product(target_product)
+    temporal_path = get_target_temporal_path(target_product)
+
+    fallback = "2012-02-01" if target_product == "viirs" else "2002-07-01"
+    if not temporal_path or not os.path.exists(temporal_path):
+        return fallback
+
+    try:
+        df = pd.read_csv(temporal_path)
+    except Exception:
+        return fallback
+
+    date_candidates = []
+    if target_product == "viirs" and "period_start" in df.columns:
+        date_candidates.append(pd.to_datetime(df["period_start"], errors="coerce"))
+    if "date" in df.columns:
+        date_candidates.append(pd.to_datetime(df["date"], errors="coerce"))
+
+    if not date_candidates:
+        return fallback
+
+    combined = pd.concat(date_candidates, axis=0).dropna()
+    if combined.empty:
+        return fallback
+
+    return combined.min().strftime("%Y-%m-%d")
+
+
+def get_dates_of_interest(start_date_str=None, end_date_str=None, target_product=None):
+    """
+    Generate a list of target-aligned dates between start_date_str and end_date_str.
 
     Parameters:
-        start_date_str (str): The start date in 'YYYY-MM-DD' format. Defaults to '2002-07-01'.
-        end_date_str (str): The end date in 'YYYY-MM-DD' format. Defaults to 60 days from today if not provided.
+        start_date_str (str | None): Start date in 'YYYY-MM-DD'. If None, inferred from target product temporal CSV.
+        end_date_str (str | None): End date in 'YYYY-MM-DD'. Defaults to today if not provided.
+        target_product (str | None): Either 'modis' or 'viirs'. If None, read from config.
 
     Returns:
-        list: A list of dates (in 'YYYY-MM-DD' format) where the day is 1, 11, or 21.
+        list: A list of dates (in 'YYYY-MM-DD' format) aligned to target cadence.
     """
+    target_product = resolve_target_product(target_product)
+
+    if start_date_str is None:
+        start_date_str = get_target_start_date(target_product=target_product)
+
+    valid_days = {1, 16} if target_product == "viirs" else {1, 11, 21}
+
     # Parse the start date
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
@@ -174,13 +267,100 @@ def get_dates_of_interest(start_date_str='2002-07-01', end_date_str=None):
     # Iterate through all dates between start_date and end_date
     current_date = start_date
     while current_date <= end_date:
-        # Check if the day ends in '01', '11', or '21'
-        if current_date.day in [1, 11, 21]:
+        # MODIS cadence: 1, 11, 21. VIIRS cadence: 1, 16.
+        if current_date.day in valid_days:
             dates_of_interest.append(current_date.strftime('%Y-%m-%d'))
         # Move to the next day
         current_date += timedelta(days=1)
 
     return dates_of_interest
+
+
+def extract_date_from_tif_filename(filename):
+    """
+    Extract a date from a tif filename by searching for an 8-digit YYYYMMDD token.
+
+    Returns:
+        pandas.Timestamp | None
+    """
+    if not isinstance(filename, str) or not filename.lower().endswith('.tif'):
+        return None
+
+    digits = ''.join(ch for ch in filename if ch.isdigit())
+    for i in range(0, max(0, len(digits) - 7)):
+        token = digits[i:i + 8]
+        try:
+            return pd.to_datetime(token, format='%Y%m%d')
+        except ValueError:
+            continue
+    return None
+
+
+def get_local_download_dates(download_path_full):
+    """Extract available local daily dates from downloaded files under a folder tree."""
+    local_dates = set()
+    if not os.path.exists(download_path_full):
+        return local_dates
+
+    for root, _, files in os.walk(download_path_full):
+        for fname in files:
+            digits = ''.join(ch for ch in fname if ch.isdigit())
+            for i in range(0, max(0, len(digits) - 7)):
+                token = digits[i:i + 8]
+                try:
+                    dt = datetime.strptime(token, '%Y%m%d')
+                    local_dates.add(dt.strftime('%Y-%m-%d'))
+                    break
+                except ValueError:
+                    continue
+    return local_dates
+
+
+def group_dates_by_target_period(dates, target_product='modis'):
+    """
+    Group daily dates into target-product windows.
+
+    MODIS windows: day 1-10, 11-20, 21-end.
+    VIIRS windows: day 1-15, 16-end.
+
+    Returns:
+        tuple[list[list[datetime]], list[list[int]]]
+    """
+    target_product = resolve_target_product(target_product)
+
+    period_buckets = {}
+    for idx, date in enumerate(dates):
+        if target_product == 'viirs':
+            start_day = 1 if date.day <= 15 else 16
+        else:
+            if date.day <= 10:
+                start_day = 1
+            elif date.day <= 20:
+                start_day = 11
+            else:
+                start_day = 21
+
+        key = datetime(date.year, date.month, start_day)
+        period_buckets.setdefault(key, []).append(idx)
+
+    date_groups = []
+    grouped_indices = []
+    for period_start, indices in sorted(period_buckets.items()):
+        _, last_day = calendar.monthrange(period_start.year, period_start.month)
+
+        if target_product == 'viirs':
+            expected = 15 if period_start.day == 1 else (last_day - 15)
+        else:
+            if period_start.day in (1, 11):
+                expected = 10
+            else:
+                expected = last_day - 20
+
+        if len(indices) == expected:
+            date_groups.append([dates[i] for i in indices])
+            grouped_indices.append(indices)
+
+    return date_groups, grouped_indices
 
 
 # Define function to linearly extrapolate missing values between data points
@@ -356,7 +536,7 @@ def mask_regions(gdf, data):
     
     # Ensure the mask has the same shape as the data
     if data[0].shape != gdf_mask.shape:
-        raise ValueError(f"Shape mismatch: Inundation {data[0].shape[1:]} vs Mask {gdf_mask.shape}")
+        raise ValueError(f"Shape mismatch: data slice {data[0].shape} vs mask {gdf_mask.shape}")
     
     # Apply the mask: Set values outside SSD to NaN
     masked_regions = np.where(gdf_mask == 1, data, np.nan)

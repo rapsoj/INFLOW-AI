@@ -36,7 +36,7 @@ def download_oni(
 
 def import_oni():
     # Import oni dataset
-    df_oni = pd.read_table(ONI_FILE_PATH, delim_whitespace=True)
+    df_oni = pd.read_table(ONI_FILE_PATH, sep=r"\s+")
     return df_oni
 
 

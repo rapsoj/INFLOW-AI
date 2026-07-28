@@ -18,14 +18,13 @@ def create_dataframe():
     kyoga = pd.read_csv('data/historic/kyoga.csv', index_col='date')
     rainfall = pd.read_csv('data/historic/rainfall.csv', index_col='date')
     teleconnections = pd.read_csv('data/historic/teleconnections.csv', index_col='date')
-    inundation_temporal_scaled = pd.read_csv('data/historic/inundation_temporal_scaled.csv', index_col='date')
+    inundation_temporal = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')
     gridded_rainfall_temporal = pd.read_csv('data/historic/gridded_rainfall_temporal.csv', index_col='date')
     gridded_rainfall_cumulative_temporal = pd.read_csv('data/historic/gridded_rainfall_cumulative_temporal.csv', index_col='date')
     gridded_moisture_temporal = pd.read_csv('data/historic/gridded_moisture_temporal.csv', index_col='date')
 
     # Calculate inundation delta
-    inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal_unscaled.csv', index_col='date')
-    inundation_temporal_delta = inundation_temporal_unscaled[['percent_inundation']].diff()
+    inundation_temporal_delta = inundation_temporal[['percent_inundation']].diff()
     inundation_temporal_delta.columns = ['inundation_delta']
 
     # Combine data into temporal dataframe
@@ -35,7 +34,7 @@ def create_dataframe():
         kyoga,
         rainfall,
         teleconnections,
-        inundation_temporal_scaled.rename({'percent_inundation': 'inundation_temporal'}, axis=1)[['inundation_temporal']],
+        inundation_temporal.rename({'percent_inundation': 'inundation_temporal'}, axis=1)[['inundation_temporal']],
         gridded_rainfall_temporal.rename({'rainfall': 'rainfall_3d_temporal'}, axis=1)[['rainfall_3d_temporal']],
         gridded_rainfall_cumulative_temporal.rename({'cumulative_rainfall': 'rainfall_cumulative'}, axis=1)[['rainfall_cumulative']],
         gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1)[['moisture_3d_temporal']],

@@ -9,16 +9,15 @@ from datetime import datetime
 # Import client libraries
 import requests
 
-# Import machine learning libraries
-from sklearn.preprocessing import StandardScaler
-
 # Import cleaning utils
 from .. import cleaning_utils
+from ..config import get_cfg
 
 # Define constants for file URL and paths
-URL = 'https://blueice.gsfc.nasa.gov/gwm/timeseries/lake000314.10d.2.txt'
-FOLDER_PATH = 'data/downloads/lake_levels'
+URL = get_cfg("sources.lake_levels.victoria_url", "https://blueice.gsfc.nasa.gov/gwm/timeseries/lake000314.10d.2.txt")
+FOLDER_PATH = get_cfg("paths.downloads.lake_levels", "data/downloads/lake_levels")
 FILE_PATH = os.path.join(FOLDER_PATH, 'Victoria.txt')
+VICTORIA_OUTPUT_PATH = get_cfg("paths.historic.victoria", "data/historic/victoria.csv")
 
 def download_data(url=URL, folder_path=FOLDER_PATH, file_path=FILE_PATH):
     """
@@ -139,32 +138,6 @@ def align_with_dates(victoria, dates_list):
     except Exception as e:
         print(f"Error in aligning data with dates: {e}")
         return victoria
-
-
-def scale_data(victoria):
-    """
-    Scale the Victoria dataset using StandardScaler based on the first 804 rows.
-
-    Parameters:
-        victoria (pd.DataFrame): The Victoria dataset.
-
-    Returns:
-        pd.DataFrame: The scaled Victoria dataset.
-    """
-    try:
-        # Initialize the StandardScaler
-        scaler = StandardScaler()
-
-        # Fit the scaler on the first 804 rows
-        scaler.fit(victoria.iloc[:804])
-
-        # Transform the entire dataset using the fitted scaler
-        df_scaled = scaler.transform(victoria)
-
-        return pd.DataFrame(df_scaled, index=victoria.index, columns=victoria.columns)
-    except Exception as e:
-        print(f"Error in scaling data: {e}")
-        return victoria
         
         
 def interpolate_missing(victoria):
@@ -201,7 +174,7 @@ def interpolate_missing(victoria):
     return victoria
 
 
-def update_victoria():
+def update_victoria(target_product=None):
     """
     Main function to download, process, and prepare the Victoria lake data.
 
@@ -216,8 +189,10 @@ def update_victoria():
         download_data()
         victoria = load_and_preprocess_data()
 
-        # Align data with the specified dates
-        dates_list = cleaning_utils.get_dates_of_interest()
+        target_product = cleaning_utils.resolve_target_product(target_product)
+
+        # Align data with target-aligned dates
+        dates_list = cleaning_utils.get_dates_of_interest(target_product=target_product)
         dates_list = pd.to_datetime(dates_list).sort_values()
         victoria = align_with_dates(victoria, dates_list)
 
@@ -225,15 +200,12 @@ def update_victoria():
         victoria = interpolate_missing(victoria)
         victoria = cleaning_utils.impute_missing_values(victoria, ['victoria_height_variation'])
 
-        # Filter to study period
-        min_date = pd.to_datetime('2002-07-01')
+        # Filter to target study period
+        min_date = pd.to_datetime(cleaning_utils.get_target_start_date(target_product=target_product))
         victoria = victoria[victoria.index >= min_date]
 
-        # Scale the data
-        victoria = scale_data(victoria)
-
         # Save the processed data
-        victoria.to_csv('data/historic/victoria.csv', index=True)
+        victoria.to_csv(VICTORIA_OUTPUT_PATH, index=True)
         print("Victoria data processing completed successfully.")
 
     except Exception as e:

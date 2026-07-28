@@ -1,10 +1,8 @@
 # Import data manipulation libraries
+import os
 import pandas as pd
 import numpy as np
 from functools import reduce
-
-# Import machine learning libraries
-from sklearn.preprocessing import StandardScaler
 
 # Import logging libraries
 import loguru
@@ -22,7 +20,13 @@ from processing.data_cleaning.download_teleconnections import dmi
 
 
 TELECONNECTIONS_OUTPUT_PATH = get_cfg("paths.historic.teleconnections", "data/historic/teleconnections.csv")
-TELECONNECTIONS_MIN_DATE = get_cfg("runtime.teleconnections.min_date", "2002-07-01")
+
+
+def get_target_output_path(target_product):
+    """Build target-specific teleconnections output path under historic alignment folders."""
+    target_product = cleaning_utils.resolve_target_product(target_product)
+    historic_root = os.path.dirname(TELECONNECTIONS_OUTPUT_PATH) or "data/historic"
+    return os.path.join(historic_root, f"{target_product}-aligned", "teleconnections.csv")
 
 
 def add_date_columns(teleconnections_dfs):
@@ -125,32 +129,6 @@ def handle_missing_values(teleconnections):
         teleconnections[col] = teleconnections_filled[col]
 
     return teleconnections
-
-
-def scale_data(teleconnections):
-    """
-    Scale the teleconnections dataset using StandardScaler based on the first 804 rows.
-
-    Parameters:
-        teleconnections (pd.DataFrame): The teleconnections dataset.
-
-    Returns:
-        pd.DataFrame: The scaled teleconnections dataset.
-    """
-    try:
-        # Initialize the StandardScaler
-        scaler = StandardScaler()
-
-        # Fit the scaler on the first 804 rows
-        scaler.fit(teleconnections.iloc[:804])
-
-        # Transform the entire dataset using the fitted scaler
-        df_scaled = scaler.transform(teleconnections)
-
-        return pd.DataFrame(df_scaled, index=teleconnections.index, columns=teleconnections.columns)
-    except Exception as e:
-        print(f"Error in scaling data: {e}")
-        return teleconnections
     
 
 def interpolate_missing(teleconnections):
@@ -195,10 +173,12 @@ def interpolate_missing(teleconnections):
 
 
 # Define main function to process teleconnections data
-def update_teleconnections():
+def update_teleconnections(target_product=None):
     """
     Main function to process the teleconnections data from download to final output.
     """
+    target_product = cleaning_utils.resolve_target_product(target_product)
+
     # Process each teleconnection data source
     df_oni = oni.process_oni()
     df_sst = sst.process_sst()
@@ -216,7 +196,7 @@ def update_teleconnections():
     teleconnections = merge_teleconnections_data(teleconnections_dfs)
 
     # Align data with the specified dates
-    dates_list = cleaning_utils.get_dates_of_interest()
+    dates_list = cleaning_utils.get_dates_of_interest(target_product=target_product)
     dates_list = pd.to_datetime(dates_list).sort_values()
     teleconnections = align_teleconnections_with_dates(teleconnections, dates_list)
 
@@ -224,13 +204,12 @@ def update_teleconnections():
     teleconnections = interpolate_missing(teleconnections)
     teleconnections = cleaning_utils.impute_missing_values(teleconnections, teleconnections.columns)
     
-    # Filter dates to study period
-    min_date = pd.to_datetime(TELECONNECTIONS_MIN_DATE)
+    # Filter dates to selected target study period
+    min_date = pd.to_datetime(cleaning_utils.get_target_start_date(target_product=target_product))
     teleconnections = teleconnections[teleconnections.index >= min_date]
 
-    # Scale the teleconnections data
-    teleconnections = scale_data(teleconnections)
-
     # Save the processed data
-    teleconnections.to_csv(TELECONNECTIONS_OUTPUT_PATH, index=True)
-    print("Teleconnections data processing completed successfully.")
+    output_path = get_target_output_path(target_product)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    teleconnections.to_csv(output_path, index=True)
+    print(f"Teleconnections data processing completed successfully for {target_product}: {output_path}")

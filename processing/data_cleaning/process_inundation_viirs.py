@@ -29,7 +29,7 @@ from .. import cleaning_utils
 from ..config import get_cfg
 
 # Import statistics
-from data.stats import gridded_data_stats
+from data.stats import gridded_stats
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -51,30 +51,16 @@ VIIRS_PERIOD_ORDER = {
 }
 
 VIIRS_DOWNLOAD_PATH = get_cfg("paths.downloads.inundation_viirs", "data/downloads/inundation_masks_viirs")
-VIIRS_H5_PATH = get_cfg("paths.historic.viirs_h5", "data/historic/viirs_inundation.h5")
-VIIRS_TEMPORAL_UNSCALED_PATH = get_cfg(
-    "paths.historic.viirs_temporal_unscaled",
-    "data/historic/viirs_inundation_temporal_unscaled.csv",
-)
-VIIRS_TEMPORAL_SCALED_PATH = get_cfg(
-    "paths.historic.viirs_temporal_scaled",
-    "data/historic/viirs_inundation_temporal_scaled.csv",
+VIIRS_H5_PATH = get_cfg("paths.historic.viirs_h5", "data/historic/inundation_viirs.h5")
+VIIRS_TEMPORAL_PATH = get_cfg(
+    "paths.historic.viirs_temporal",
+    "data/historic/inundation_viirs_temporal.csv",
 )
 VIIRS_DSET_NAME = "inundation"
 INFLOW_CATCHMENTS_PATH = get_cfg(
     "paths.maps.catchments",
     "data/maps/inflow_catchments/INFLOW_all_cmts.shp",
 )
-
-
-def read_stats(region='all'):
-    """
-    Read the gridded data statistics file.
-    """
-    inundation_mean = gridded_data_stats.inundation_stats[region]['mean']
-    inundation_std = gridded_data_stats.inundation_stats[region]['std']
-
-    return inundation_mean, inundation_std
 
 
 def parse_viirs_filename(file_name):
@@ -383,7 +369,7 @@ def process_and_clip_rasters(tif_files, folder_path, catchments):
     return clipped_tif_files, tif_file_names, spatial_metadata
 
 
-def get_historic_dates(data_path=VIIRS_TEMPORAL_UNSCALED_PATH):
+def get_historic_dates(data_path=VIIRS_TEMPORAL_PATH):
     """
     Get list of historic VIIRS records from pre-downloaded data.
 
@@ -454,18 +440,13 @@ def download_new_inundation(download_path=VIIRS_DOWNLOAD_PATH, burn_in_steps=18)
         logging.info("No new VIIRS files to download.")
 
 
-def crop_historic_data(file_path, temporal_data_path, temporal_data_path_scaled):
+def crop_historic_data(file_path, temporal_data_path):
     """
-    Crop or recreate the historic inundation HDF5 dataset to match the temporal CSV lengths.
-
-    If the HDF5 dataset is longer than the CSVs, the entire HDF5 file will be truncated and recreated.
-    Both the original and scaled temporal CSVs are cropped if the HDF5 dataset is shorter.
+    Crop or recreate the historic inundation HDF5 dataset to match the temporal CSV length.
     """
 
-    # --- Load temporal data lengths only ---
     hist = pd.read_csv(temporal_data_path)
-    hist_scaled = pd.read_csv(temporal_data_path_scaled)
-    new_len = min(len(hist), len(hist_scaled))
+    new_len = len(hist)
 
     # --- Open HDF5 and check dataset length ---
     with h5py.File(file_path, "r+") as f:
@@ -473,11 +454,10 @@ def crop_historic_data(file_path, temporal_data_path, temporal_data_path_scaled)
         dset = f[dset_name]
         current_len = dset.shape[0]
 
-        # --- If HDF5 shorter, crop CSVs to match ---
+        # --- If HDF5 shorter, crop CSV to match ---
         if current_len < new_len:
             hist.iloc[:current_len].to_csv(temporal_data_path, index=False)
-            hist_scaled.iloc[:current_len].to_csv(temporal_data_path_scaled, index=False)
-            print(f"✂️ Cropped CSVs to {current_len} timesteps.")
+            print(f"Cropped CSV to {current_len} timesteps.")
 
         # --- If HDF5 longer, recreate file (truncate + rewrite) ---
         elif current_len > new_len:
@@ -505,18 +485,16 @@ def crop_historic_data(file_path, temporal_data_path, temporal_data_path_scaled)
 
 
 def remove_burn_in_data(h5_file_path=VIIRS_H5_PATH,
-                        temporal_data_path=VIIRS_TEMPORAL_UNSCALED_PATH,
-                        temporal_data_path_scaled=VIIRS_TEMPORAL_SCALED_PATH,
+                        temporal_data_path=VIIRS_TEMPORAL_PATH,
                         dset_name=VIIRS_DSET_NAME,
                         burn_in_steps=18):
     """
     Remove the last `burn_in_steps` timesteps from saved VIIRS data
-    (spatio-temporal HDF5 dataset and temporal CSVs).
+    (spatio-temporal HDF5 dataset and temporal CSV).
 
     Parameters:
         h5_file_path (str): Path to spatio-temporal historic VIIRS HDF5 file.
-        temporal_data_path (str): Path to temporal unscaled CSV file.
-        temporal_data_path_scaled (str): Path to temporal scaled CSV file.
+        temporal_data_path (str): Path to temporal CSV file.
         dset_name (str): Name of dataset inside the HDF5 file.
         burn_in_steps (int): Number of timesteps (along axis 0) to drop from the end.
     """
@@ -545,32 +523,25 @@ def remove_burn_in_data(h5_file_path=VIIRS_H5_PATH,
         )
         dset[:] = data_cropped
 
-    # --- Process temporal CSV files ---
-    for csv_path in [temporal_data_path, temporal_data_path_scaled]:
-        df = pd.read_csv(csv_path)
-        if len(df) <= burn_in_steps:
-            raise ValueError(f"Not enough rows in {csv_path} to remove burn-in data.")
+    df = pd.read_csv(temporal_data_path)
+    if len(df) <= burn_in_steps:
+        raise ValueError(f"Not enough rows in {temporal_data_path} to remove burn-in data.")
 
-        # Remove last burn-in rows
-        df_cropped = df.iloc[:-burn_in_steps].reset_index(drop=True)
+    df_cropped = df.iloc[:-burn_in_steps].reset_index(drop=True)
+    sort_cols = [c for c in ["year", "month", "period_order"] if c in df_cropped.columns]
+    if sort_cols:
+        df_cropped = df_cropped.sort_values(sort_cols).reset_index(drop=True)
+    elif "date" in df_cropped.columns:
+        df_cropped["date"] = pd.to_datetime(df_cropped["date"])
+        df_cropped = df_cropped.sort_values("date").reset_index(drop=True)
+    df_cropped.to_csv(temporal_data_path, index=False)
 
-        # Sort chronologically if VIIRS period metadata exists
-        sort_cols = [c for c in ["year", "month", "period_order"] if c in df_cropped.columns]
-        if sort_cols:
-            df_cropped = df_cropped.sort_values(sort_cols).reset_index(drop=True)
-        elif "date" in df_cropped.columns:
-            df_cropped["date"] = pd.to_datetime(df_cropped["date"])
-            df_cropped = df_cropped.sort_values("date").reset_index(drop=True)
-
-        # Save back to CSV
-        df_cropped.to_csv(csv_path, index=False)
-
-    print(f"Removed last {burn_in_steps} timesteps from HDF5 and temporal CSVs.")
+    print(f"Removed last {burn_in_steps} timesteps from HDF5 and temporal CSV.")
 
 
 def build_viirs_temporal_dataframe(file_names, clipped_rasters, regions_gdf=None):
     """
-    Build unscaled and scaled temporal dataframes from VIIRS rasters.
+    Build temporal dataframe from VIIRS rasters.
     """
     if not clipped_rasters:
         raise ValueError("No clipped VIIRS rasters were provided.")
@@ -590,46 +561,33 @@ def build_viirs_temporal_dataframe(file_names, clipped_rasters, regions_gdf=None
         "percent_inundation": np.sum(clipped_rasters, axis=(1, 2)) / total_cells,
     })
 
-    inundation_temporal_scaled = inundation_temporal.copy()
-    temporal_mean, temporal_std = read_stats()
-    inundation_temporal_scaled["percent_inundation"] = (
-        inundation_temporal_scaled["percent_inundation"] - temporal_mean
-    ) / temporal_std
-
     if regions_gdf is not None and len(regions_gdf) > 0:
         for i in range(len(regions_gdf)):
             region_data = regions_gdf.iloc[[i]]
-            region_code = gridded_data_stats.region_to_code_dict[region_data["region"].values[0]]
+            region_code = gridded_stats.region_to_code_dict[region_data["region"].values[0]]
             region_area = cleaning_utils.mask_regions(region_data, np.array(clipped_rasters))
-
-            temporal_mean_region, temporal_std_region = read_stats(region=region_code)
             region_series = np.nansum(region_area, axis=(1, 2)) / (
                 total_cells - np.sum(np.isnan(region_area[0]))
             )
             inundation_temporal[f"percent_inundation_{region_code}"] = region_series
-            inundation_temporal_scaled[f"percent_inundation_{region_code}"] = (
-                region_series - temporal_mean_region
-            ) / temporal_std_region
 
     sort_cols = [c for c in ["year", "month", "period_order"] if c in inundation_temporal.columns]
     if sort_cols:
         inundation_temporal = inundation_temporal.sort_values(sort_cols).reset_index(drop=True)
-        inundation_temporal_scaled = inundation_temporal_scaled.sort_values(sort_cols).reset_index(drop=True)
 
-    return inundation_temporal, inundation_temporal_scaled
+    return inundation_temporal
 
 
 def update_inundation(h5_file_path=VIIRS_H5_PATH,
                       download_path=VIIRS_DOWNLOAD_PATH,
-                      temporal_data_path=VIIRS_TEMPORAL_UNSCALED_PATH,
-                      temporal_data_path_scaled=VIIRS_TEMPORAL_SCALED_PATH):
+                      temporal_data_path=VIIRS_TEMPORAL_PATH):
     """
     Process newly downloaded VIIRS data and combine it with existing data.
 
     Parameters:
         download_path (str): Directory path to save downloaded TIF files.
         temporal_data_path (str): Directory path of pre-downloaded temporal data.
-        temporal_data_path_scaled (str): Directory path of pre-downloaded scaled temporal data.
+        temporal_data_path (str): Directory path of pre-downloaded temporal data.
     """
     try:
         has_existing_h5 = False
@@ -644,8 +602,7 @@ def update_inundation(h5_file_path=VIIRS_H5_PATH,
             # Crop historic data if historic spatial and temporal data are not the same size
             crop_historic_data(
                 file_path=h5_file_path,
-                temporal_data_path=temporal_data_path,
-                temporal_data_path_scaled=temporal_data_path_scaled
+                temporal_data_path=temporal_data_path
             )
 
             # Remove burn-in data
@@ -680,7 +637,7 @@ def update_inundation(h5_file_path=VIIRS_H5_PATH,
         regions_gdf = cleaning_utils.extract_regions()
 
         # Build temporal dataframes
-        viirs_temporal, viirs_temporal_scaled = build_viirs_temporal_dataframe(
+        viirs_temporal = build_viirs_temporal_dataframe(
             new_file_names,
             new_clipped_tif_files,
             regions_gdf=regions_gdf
@@ -710,27 +667,18 @@ def update_inundation(h5_file_path=VIIRS_H5_PATH,
         else:
             viirs_temporal_historic = pd.DataFrame(columns=viirs_temporal.columns)
 
-        if old_dataset_length > 0 and os.path.exists(temporal_data_path_scaled):
-            viirs_temporal_historic_scaled = pd.read_csv(temporal_data_path_scaled)[:old_dataset_length]
-        else:
-            viirs_temporal_historic_scaled = pd.DataFrame(columns=viirs_temporal_scaled.columns)
         viirs_temporal_new = pd.concat([viirs_temporal_historic, viirs_temporal], ignore_index=True)
-        viirs_temporal_new_scaled = pd.concat([viirs_temporal_historic_scaled, viirs_temporal_scaled], ignore_index=True)
 
         # Save the updated temporal data
         sort_cols = [c for c in ["year", "month", "period_order"] if c in viirs_temporal_new.columns]
         if sort_cols:
             viirs_temporal_new = viirs_temporal_new.sort_values(sort_cols).reset_index(drop=True)
-            viirs_temporal_new_scaled = viirs_temporal_new_scaled.sort_values(sort_cols).reset_index(drop=True)
         elif "date" in viirs_temporal_new.columns:
             viirs_temporal_new["date"] = pd.to_datetime(viirs_temporal_new["date"], errors="coerce")
             viirs_temporal_new = viirs_temporal_new.sort_values("date").reset_index(drop=True)
-            viirs_temporal_new_scaled["date"] = pd.to_datetime(viirs_temporal_new_scaled["date"], errors="coerce")
-            viirs_temporal_new_scaled = viirs_temporal_new_scaled.sort_values("date").reset_index(drop=True)
 
-        os.makedirs(os.path.dirname(VIIRS_TEMPORAL_UNSCALED_PATH), exist_ok=True)
-        viirs_temporal_new.to_csv(VIIRS_TEMPORAL_UNSCALED_PATH, index=False)
-        viirs_temporal_new_scaled.to_csv(VIIRS_TEMPORAL_SCALED_PATH, index=False)
+        os.makedirs(os.path.dirname(VIIRS_TEMPORAL_PATH), exist_ok=True)
+        viirs_temporal_new.to_csv(VIIRS_TEMPORAL_PATH, index=False)
 
     except Exception as e:
         logging.error(f"Error processing new VIIRS data: {e}")

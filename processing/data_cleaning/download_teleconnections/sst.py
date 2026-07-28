@@ -36,7 +36,7 @@ def download_sst(
 
 def import_sst():
     # Import sst dataset
-    df_sst = pd.read_table(SST_FILE_PATH, delim_whitespace=True)
+    df_sst = pd.read_table(SST_FILE_PATH, sep=r"\s+")
     return df_sst
 
 

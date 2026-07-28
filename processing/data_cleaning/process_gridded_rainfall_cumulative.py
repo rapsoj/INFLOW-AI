@@ -3,9 +3,10 @@ import os
 
 # Import cleaning utils
 from .. import cleaning_utils
+from ..config import get_cfg
 
 # Import statistics
-from data.stats import gridded_data_stats
+from data.stats import gridded_stats
 
 # Import data manipulation libraries
 import numpy as np
@@ -19,13 +20,18 @@ import h5py
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+GR_RAINFALL_TEMPORAL_PATH = get_cfg("paths.historic.gridded_rainfall_temporal", "data/historic/gridded_rainfall_temporal.csv")
+GR_RAINFALL_H5_PATH = get_cfg("paths.historic.gridded_rainfall_h5", "data/historic/gridded_rainfall.h5")
+GR_RAINFALL_CUM_TEMPORAL_PATH = get_cfg("paths.historic.gridded_rainfall_cumulative_temporal", "data/historic/gridded_rainfall_cumulative_temporal.csv")
+GR_RAINFALL_CUM_H5_PATH = get_cfg("paths.historic.gridded_rainfall_cumulative_h5", "data/historic/gridded_rainfall_cumulative.h5")
+
 
 def read_stats(region='all'):
     """
     Read the gridded data statistics file.
     """
-    rainfall_cumulative_mean = gridded_data_stats.gridded_rainfall_cumulative_stats[region]['mean']
-    rainfall_cumulative_std = gridded_data_stats.gridded_rainfall_cumulative_stats[region]['std']
+    rainfall_cumulative_mean = gridded_stats.gridded_rainfall_cumulative_stats[region]['mean']
+    rainfall_cumulative_std = gridded_stats.gridded_rainfall_cumulative_stats[region]['std']
     
     return rainfall_cumulative_mean, rainfall_cumulative_std
 
@@ -58,7 +64,7 @@ def unstandardize_array(array, mean, std):
     return unstandardized_array
     
     
-def get_historic_dates(data_path='data/historic/gridded_rainfall_cumulative_temporal.csv'):
+def get_historic_dates(data_path=GR_RAINFALL_CUM_TEMPORAL_PATH):
     """
     Get list of historic dates from pre-downloaded data.
 
@@ -74,8 +80,8 @@ def get_historic_dates(data_path='data/historic/gridded_rainfall_cumulative_temp
         return []
         
         
-def get_new_dates(rainfall_data_path='data/historic/gridded_rainfall_temporal.csv',
-                  cumulative_rainfall_data_path='data/historic/gridded_rainfall_cumulative_temporal.csv'):
+def get_new_dates(rainfall_data_path=GR_RAINFALL_TEMPORAL_PATH,
+                  cumulative_rainfall_data_path=GR_RAINFALL_CUM_TEMPORAL_PATH):
     """
     Get list of new dates from pre-downloaded data.
 
@@ -93,10 +99,10 @@ def get_new_dates(rainfall_data_path='data/historic/gridded_rainfall_temporal.cs
 
 
 
-def load_new_gridded_rainfall_data(temporal_data_path='data/historic/gridded_rainfall_temporal.csv',
-								   cum_temporal_data_path='data/historic/gridded_rainfall_cumulative_temporal.csv', 
-								   data_path='data/historic/gridded_rainfall.h5', 
-								   cum_data_path='data/historic/gridded_rainfall_cumulative.h5'):
+def load_new_gridded_rainfall_data(temporal_data_path=GR_RAINFALL_TEMPORAL_PATH,
+                                   cum_temporal_data_path=GR_RAINFALL_CUM_TEMPORAL_PATH,
+                                   data_path=GR_RAINFALL_H5_PATH,
+                                   cum_data_path=GR_RAINFALL_CUM_H5_PATH):
 	"""
 	Load new gridded rainfall data to be combined with cumulative sums.
 
@@ -175,8 +181,8 @@ def crop_historic_data(file_path, temporal_data_path):
 
 
 def update_gridded_rainfall_cumulative(
-    data_path='data/historic/gridded_rainfall_cumulative.h5',
-    temporal_data_path='data/historic/gridded_rainfall_cumulative_temporal.csv'):
+    data_path=GR_RAINFALL_CUM_H5_PATH,
+    temporal_data_path=GR_RAINFALL_CUM_TEMPORAL_PATH):
     """
     Combine newly downloaded gridded rainfall with existing data.
 
@@ -188,7 +194,7 @@ def update_gridded_rainfall_cumulative(
     try:
         # Crop historic data if historic spatial and temporal data are not the same size   
         crop_historic_data(
-            file_path="data/historic/gridded_rainfall_cumulative.h5",
+            file_path=GR_RAINFALL_CUM_H5_PATH,
             temporal_data_path=temporal_data_path,
             )
             
@@ -226,7 +232,7 @@ def update_gridded_rainfall_cumulative(
             # Loop through regions
             for i in range(len(regions_gdf)):
                 region_data = regions_gdf.iloc[[i]]
-                region_code = gridded_data_stats.region_to_code_dict[region_data['region'].values[0]]
+                region_code = gridded_stats.region_to_code_dict[region_data['region'].values[0]]
                 region_area = cleaning_utils.mask_regions(region_data, np.array(new_data))
                 
                 # Get stats for region

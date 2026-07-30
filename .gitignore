@@ -1,4 +1,5 @@
 data/
+predictions/
 model/testing/
 *.csv
 *.pkl

@@ -1,7 +1,6 @@
 data/
 predictions/
 model/testing/
-*.csv
 *.pkl
 *.h5
 *.pt

@@ -8,20 +8,38 @@ from tqdm import tqdm
 from processing import cleaning_utils
 
 
+def get_target_historic_path(filename):
+    return cleaning_utils.get_target_historic_path(filename)
+
+
+def read_target_inundation_temporal():
+    target_product = cleaning_utils.resolve_target_product(None)
+    path = get_target_historic_path(f"inundation_{target_product}_temporal.csv")
+    frame = pd.read_csv(path)
+    date_column = "period_start" if target_product == "viirs" and "period_start" in frame.columns else "date"
+    if date_column not in frame.columns:
+        raise ValueError(f"No usable date column found in target inundation data: {path}")
+    frame[date_column] = pd.to_datetime(frame[date_column], errors="coerce")
+    frame = frame.dropna(subset=[date_column]).set_index(date_column).sort_index()
+    frame.index.name = "date"
+    return frame
+
+
 def create_dataframe():
     """
     Create dataframe from recently refreshed data.
     """
     # Load data
-    victoria = pd.read_csv('data/historic/victoria.csv', index_col='date')
-    albert = pd.read_csv('data/historic/albert.csv', index_col='date')
-    kyoga = pd.read_csv('data/historic/kyoga.csv', index_col='date')
-    rainfall = pd.read_csv('data/historic/rainfall.csv', index_col='date')
-    teleconnections = pd.read_csv('data/historic/teleconnections.csv', index_col='date')
-    inundation_temporal = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')
-    gridded_rainfall_temporal = pd.read_csv('data/historic/gridded_rainfall_temporal.csv', index_col='date')
-    gridded_rainfall_cumulative_temporal = pd.read_csv('data/historic/gridded_rainfall_cumulative_temporal.csv', index_col='date')
-    gridded_moisture_temporal = pd.read_csv('data/historic/gridded_moisture_temporal.csv', index_col='date')
+    target_product = cleaning_utils.resolve_target_product(None)
+    victoria = pd.read_csv(get_target_historic_path('victoria.csv'), index_col='date')
+    albert = pd.read_csv(get_target_historic_path('albert.csv'), index_col='date')
+    kyoga = pd.read_csv(get_target_historic_path('kyoga.csv'), index_col='date')
+    rainfall = pd.read_csv(get_target_historic_path('rainfall.csv'), index_col='date')
+    teleconnections = pd.read_csv(get_target_historic_path('teleconnections.csv'), index_col='date')
+    inundation_temporal = read_target_inundation_temporal()
+    gridded_rainfall_temporal = pd.read_csv(get_target_historic_path('gridded_rainfall_temporal.csv'), index_col='date')
+    gridded_rainfall_cumulative_temporal = pd.read_csv(get_target_historic_path('gridded_rainfall_cumulative_temporal.csv'), index_col='date')
+    gridded_moisture_temporal = pd.read_csv(get_target_historic_path('gridded_moisture_temporal.csv'), index_col='date')
 
     # Calculate inundation delta
     inundation_temporal_delta = inundation_temporal[['percent_inundation']].diff()

@@ -185,7 +185,9 @@ def update_albert(target_product=None):
         albert = albert[albert.index >= min_date]
 
         # Save processed data
-        albert.to_csv(ALBERT_OUTPUT_PATH, index=True)
+        output_path = cleaning_utils.get_target_historic_path("albert.csv", target_product)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        albert.to_csv(output_path, index=True)
         print("Lake Albert data processing completed successfully.")
     
     except Exception as e:

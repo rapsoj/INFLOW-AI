@@ -205,7 +205,9 @@ def update_victoria(target_product=None):
         victoria = victoria[victoria.index >= min_date]
 
         # Save the processed data
-        victoria.to_csv(VICTORIA_OUTPUT_PATH, index=True)
+        output_path = cleaning_utils.get_target_historic_path("victoria.csv", target_product)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        victoria.to_csv(output_path, index=True)
         print("Victoria data processing completed successfully.")
 
     except Exception as e:

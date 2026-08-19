@@ -25,7 +25,7 @@ TELECONNECTIONS_OUTPUT_PATH = get_cfg("paths.historic.teleconnections", "data/hi
 def get_target_output_path(target_product):
     """Build target-specific teleconnections output path under historic alignment folders."""
     target_product = cleaning_utils.resolve_target_product(target_product)
-    historic_root = os.path.dirname(TELECONNECTIONS_OUTPUT_PATH) or "data/historic"
+    historic_root = get_cfg("paths.historic.root", "data/historic")
     return os.path.join(historic_root, f"{target_product}-aligned", "teleconnections.csv")
 
 

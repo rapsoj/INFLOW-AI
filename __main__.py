@@ -11,12 +11,14 @@ from processing.data_cleaning import process_kyoga
 from processing.data_cleaning import process_rainfall
 from processing.data_cleaning import process_teleconnections
 from processing.data_cleaning import process_inundation_modis
+from processing.data_cleaning import process_inundation_viirs
 from processing.data_cleaning import process_gridded_rainfall
 from processing.data_cleaning import process_gridded_rainfall_cumulative
 from processing.data_cleaning import process_gridded_moisture
 
 # Import model prediction functions
 from model import make_spatial_prediction
+from model import train_temporal_model
 
 # Import model explanation functions
 from explanations import plot_explanations
@@ -48,6 +50,25 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
+def get_target_inundation_temporal_path():
+	target_product = cleaning_utils.resolve_target_product(None)
+	filename = f"inundation_{target_product}_temporal.csv"
+	return cleaning_utils.get_target_historic_path(filename, target_product)
+
+
+def read_target_inundation_temporal():
+	target_product = cleaning_utils.resolve_target_product(None)
+	path = get_target_inundation_temporal_path()
+	frame = pd.read_csv(path)
+	date_column = "period_start" if target_product == "viirs" and "period_start" in frame.columns else "date"
+	if date_column not in frame.columns:
+		raise ValueError(f"No usable date column found in target inundation data: {path}")
+	frame[date_column] = pd.to_datetime(frame[date_column], errors="coerce")
+	frame = frame.dropna(subset=[date_column]).set_index(date_column).sort_index()
+	frame.index.name = "date"
+	return frame
+
+
 def get_future_dates(data):
 	"""
 	Get dates of next six dekads from most recent date in data.
@@ -62,6 +83,22 @@ def get_future_dates(data):
 	return future_dates
 
 
+def calculate_seasonal_statistics(temporal_data_df):
+	"""Calculate and persist normalization statistics from the current training frame."""
+	stats_frame = temporal_data_df.copy()
+	stats_frame['month_day'] = stats_frame.index.strftime('%m-%d')
+	means = stats_frame.groupby('month_day').mean(numeric_only=True)
+	stds = stats_frame.groupby('month_day').std(numeric_only=True)
+	stds = stds.replace([np.inf, -np.inf, 0], np.nan).fillna(1.0)
+
+	stats_dir = 'data/stats'
+	os.makedirs(stats_dir, exist_ok=True)
+	means.to_csv(os.path.join(stats_dir, 'seasonal_means.csv'), index=True)
+	stds.to_csv(os.path.join(stats_dir, 'seasonal_stds.csv'), index=True)
+	logging.info('Wrote seasonal normalization statistics from %d training rows.', len(temporal_data_df))
+	return means, stds
+
+
 def check_if_new_data(data_path='data/temporal_data_seasonal_df.csv'):
     """
     Prevents running data update if model is run during a dekad already in the data.
@@ -69,7 +106,20 @@ def check_if_new_data(data_path='data/temporal_data_seasonal_df.csv'):
     Parameters:
         data_path: Path to temporal data from previous update.
     """
-    data = pd.read_csv(data_path, index_col=0)
+    if not os.path.exists(data_path):
+        parent_dir = os.path.dirname(data_path)
+        if parent_dir and not os.path.exists(parent_dir):
+            os.makedirs(parent_dir, exist_ok=True)
+        return True
+
+    try:
+        data = pd.read_csv(data_path, index_col=0)
+    except (FileNotFoundError, ValueError, OSError):
+        return True
+
+    if data.empty:
+        return True
+
     today_date = datetime.today().strftime("%Y-%m-%d")
     last_date = data.index[-1]
     possible_dates = cleaning_utils.get_dates_of_interest(last_date)
@@ -88,13 +138,17 @@ def update_data():
 	Update all temporal data for model.
 	"""
 	if check_if_new_data():
+		target_product = cleaning_utils.resolve_target_product(None)
 
 		process_victoria.update_victoria()
 		process_albert.update_albert()
 		process_kyoga.update_kyoga()
 		process_rainfall.update_rainfall()
-		process_teleconnections.update_teleconnections()
-		process_inundation_modis.update_inundation()
+		process_teleconnections.update_teleconnections(target_product=target_product)
+		if target_product == "viirs":
+			process_inundation_viirs.update_inundation()
+		else:
+			process_inundation_modis.update_inundation()
 		process_gridded_rainfall.update_gridded_rainfall()
 		process_gridded_rainfall_cumulative.update_gridded_rainfall_cumulative()
 		process_gridded_moisture.update_gridded_moisture()
@@ -110,15 +164,37 @@ def create_dataframe():
 	Create dataframe from recently refreshed data.
 	"""
 	# Load data
-	victoria = pd.read_csv('data/historic/victoria.csv', index_col='date')
-	albert = pd.read_csv('data/historic/albert.csv', index_col='date')
-	kyoga = pd.read_csv('data/historic/kyoga.csv', index_col='date')
-	rainfall = pd.read_csv('data/historic/rainfall.csv', index_col='date')
-	teleconnections = pd.read_csv('data/historic/teleconnections.csv', index_col='date')
-	inundation_temporal = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')
-	gridded_rainfall_temporal = pd.read_csv('data/historic/gridded_rainfall_temporal.csv', index_col='date')
-	gridded_rainfall_cumulative_temporal = pd.read_csv('data/historic/gridded_rainfall_cumulative_temporal.csv', index_col='date')
-	gridded_moisture_temporal = pd.read_csv('data/historic/gridded_moisture_temporal.csv', index_col='date')
+	target_product = cleaning_utils.resolve_target_product(None)
+	victoria = pd.read_csv(cleaning_utils.get_target_historic_path('victoria.csv', target_product), index_col='date')
+	albert = pd.read_csv(cleaning_utils.get_target_historic_path('albert.csv', target_product), index_col='date')
+	kyoga = pd.read_csv(cleaning_utils.get_target_historic_path('kyoga.csv', target_product), index_col='date')
+	rainfall = pd.read_csv(cleaning_utils.get_target_historic_path('rainfall.csv', target_product), index_col='date')
+	target_product = cleaning_utils.resolve_target_product(None)
+	teleconnections_path = process_teleconnections.get_target_output_path(target_product)
+	if not os.path.exists(teleconnections_path):
+		raise FileNotFoundError(
+			f"Required teleconnections data is missing for target product '{target_product}': "
+			f"{teleconnections_path}"
+		)
+	teleconnections = pd.read_csv(teleconnections_path, index_col='date')
+	if teleconnections.empty or teleconnections.dropna(how='all').empty:
+		raise ValueError(
+			f"Required teleconnections data is empty for target product '{target_product}': "
+			f"{teleconnections_path}"
+		)
+	inundation_temporal = read_target_inundation_temporal()
+	gridded_rainfall_temporal = pd.read_csv(cleaning_utils.get_target_historic_path('gridded_rainfall_temporal.csv', target_product), index_col='date')
+	gridded_rainfall_cumulative_temporal = pd.read_csv(cleaning_utils.get_target_historic_path('gridded_rainfall_cumulative_temporal.csv', target_product), index_col='date')
+	gridded_moisture_temporal = pd.read_csv(cleaning_utils.get_target_historic_path('gridded_moisture_temporal.csv', target_product), index_col='date')
+	data_sources = [
+		victoria, albert, kyoga, rainfall, teleconnections,
+		inundation_temporal, gridded_rainfall_temporal,
+		gridded_rainfall_cumulative_temporal, gridded_moisture_temporal,
+	]
+	for source in data_sources:
+		source.index = pd.to_datetime(source.index, errors='coerce')
+		source.drop(source.index[source.index.isna()], inplace=True)
+
 
 	# Calculate inundation delta
 	inundation_temporal_delta = inundation_temporal[['percent_inundation']].diff()
@@ -137,13 +213,20 @@ def create_dataframe():
 	    gridded_moisture_temporal.rename({'moisture': 'moisture_3d_temporal'}, axis=1)[['moisture_3d_temporal']],
 	    inundation_temporal_delta
 	], axis=1)
-	temporal_data_df = cleaning_utils.impute_missing_values(temporal_data_df, temporal_data_df.drop(columns=['inundation_temporal', 'inundation_delta']).columns)
+	temporal_data_df.index = pd.to_datetime(temporal_data_df.index, errors='coerce')
+	temporal_data_df = temporal_data_df[~temporal_data_df.index.isna()]
+	temporal_data_df = temporal_data_df[~temporal_data_df.index.duplicated(keep='last')].sort_index()
+	training_data_df = temporal_data_df.dropna().copy()
+	if training_data_df.empty:
+		raise ValueError(
+			"No complete aligned rows are available for training. "
+			"Missing source data must be repaired before prediction."
+		)
 
-	# Create month-day index and load saved seasonal statistics for scaling
-	temporal_data_df['month_day'] = pd.to_datetime(temporal_data_df.index).strftime('%m-%d')
-	temporal_data_seasonal_df = temporal_data_df.copy()
-	means = pd.read_csv('data/stats/seasonal_means.csv', index_col='month_day')
-	stds = pd.read_csv('data/stats/seasonal_stds.csv', index_col='month_day')
+	# Create month-day index and calculate statistics from this exact training frame.
+	training_data_df['month_day'] = training_data_df.index.strftime('%m-%d')
+	temporal_data_seasonal_df = training_data_df.copy()
+	means, stds = calculate_seasonal_statistics(training_data_df.drop(columns=['month_day']))
 
 	# Normalize each variable using the corresponding means and stds
 	for column in temporal_data_seasonal_df.columns[:-1]:  # Exclude the month_day column
@@ -171,7 +254,14 @@ def create_dataframe():
 
 	# Drop month-day column
 	temporal_data_seasonal_df = temporal_data_seasonal_df.drop('month_day', axis=1).dropna()
-	temporal_data_seasonal_df.to_csv('data/temporal_data_seasonal_df.csv')
+	if temporal_data_seasonal_df.empty:
+		raise ValueError(
+			"No complete aligned temporal rows remain for prediction. "
+			"The selected VIIRS inundation history or another required input is incomplete."
+		)
+	output_path = 'data/temporal_data_seasonal_df.csv'
+	os.makedirs(os.path.dirname(output_path), exist_ok=True)
+	temporal_data_seasonal_df.to_csv(output_path)
 
 	return temporal_data_seasonal_df
 
@@ -219,6 +309,19 @@ def predict_new_inundation_transformer(data, model_path='model/temporal_model.ke
 	logging.info(f"New inundation predicted.")
 
 	return y_pred, X_pred_reshaped, model_delta
+
+
+def retrain_temporal_model(data, model_path='model/temporal_model.keras'):
+	"""Retrain and save the temporal model from the normalized current training frame."""
+	predictors = data.iloc[:, :-1].values
+	target = data.iloc[:, -1].values.reshape(-1, 1)
+	X, y, _ = train_temporal_model.create_overlapping_sequences(
+		predictors, target, look_back=36, predict_ahead=6
+	)
+	if len(X) == 0:
+		raise ValueError('Not enough complete temporal rows to build training sequences.')
+	train_temporal_model.train_full_and_save(X, y, model_path=model_path)
+	logging.info('Retrained temporal model from %d sequences.', len(X))
 	
 	
 def predict_new_inundation_rf(data, model_path='model/temporal_model.pkl', pca_path='model/pca_model.pkl'):
@@ -304,7 +407,7 @@ def re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_
 		monte_carlo (boolean): Whether Monte Carlo simulations are necessary to produce confidence intervals, if False, must provide values for upper and lower bounds.
 	"""
 	# Load unscaled temporal inundation data
-	inundation_temporal_unscaled = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date').reindex(data.index)
+	inundation_temporal_unscaled = read_target_inundation_temporal().reindex(data.index)
 	inundation_temporal_unscaled = cleaning_utils.impute_missing_values(inundation_temporal_unscaled, inundation_temporal_unscaled.columns)
 	
 	# Load seasonal statistics
@@ -380,18 +483,18 @@ def print_trigger(inundation_pred, future_dates):
     """
     # Set threshold
     threshold_delta = 0.05
-    
+
     # Define the folder path
     folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
-    
+
     # Format predictions data
-	inundation_unscaled = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')[['percent_inundation']]
-    
-    # Export S-EAP trigger if activated 
+    inundation_unscaled = read_target_inundation_temporal()[['percent_inundation']]
+
+    # Export S-EAP trigger if activated
     pred_max = np.max(inundation_pred[:, :], axis=1)
     season_min = inundation_unscaled['percent_inundation'].rolling(window=18, min_periods=1).min().iloc[-1]
     if pred_max - season_min > threshold_delta:
-        
+
         # Write the message to a file
         today_date = today = date.today().strftime("%Y-%m-%d")
         trigger_date = future_dates[np.argmax(inundation_pred[:, :])]
@@ -399,38 +502,40 @@ def print_trigger(inundation_pred, future_dates):
         pred_max_round = np.round(pred_max * 100, 1)[0]
         season_min_round = np.round(season_min * 100, 1)
         message = (
-        f"Alert triggered on {today_date}. "
-        f"Flood extent predicted to cover {pred_max_round}% of South Sudan by {trigger_date}. "
-        f"This is an increase of {pred_delta}% of the total area of the country that is inundated "
-        f"since the seasonal flood extent minimum of {season_min_round}%, passing the seasonal inundation extent change threshold of 5.0% set out in the S-EAP."
+            f"Alert triggered on {today_date}. "
+            f"Flood extent predicted to cover {pred_max_round}% of South Sudan by {trigger_date}. "
+            f"This is an increase of {pred_delta}% of the total area of the country that is inundated "
+            f"since the seasonal flood extent minimum of {season_min_round}%, passing the seasonal inundation extent change threshold of 5.0% set out in the S-EAP."
         )
         with open(f"{folder_path}/TRIGGER ACTIVATED.txt", "w") as file:
             file.write(message)
 
 
 def export_csv(inundation_pred, lower_bound_unscaled_inundation, upper_bound_unscaled_inundation, future_dates):
-	"""
-	Export CSV with predictions and 95% upper and lower confidence intervals.
-	"""
+    """
+    Export CSV with predictions and 95% upper and lower confidence intervals.
+    """
     # Create predictions dataframe
-	predictions = pd.DataFrame({'lower_bound_95': lower_bound_unscaled_inundation[0],
-	                            'percent_inundation': inundation_pred[0],
-	                            'upper_bound_95': upper_bound_unscaled_inundation[0]}, index=future_dates)
-	inundation_unscaled = pd.read_csv('data/historic/inundation_temporal.csv', index_col='date')[['percent_inundation']]
-	predictions = pd.concat([inundation_unscaled, predictions])
-	 
-	# Define the folder path
-	folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
-	
-	# Create the folder if it doesn't exist
-	if not os.path.exists(folder_path):
-	    os.makedirs(folder_path)
-	    print(f"Folder created: {folder_path}")
-	else:
-	    print(f"Folder already exists: {folder_path}")
-    
+    predictions = pd.DataFrame({
+        'lower_bound_95': lower_bound_unscaled_inundation[0],
+        'percent_inundation': inundation_pred[0],
+        'upper_bound_95': upper_bound_unscaled_inundation[0]
+    }, index=future_dates)
+    inundation_unscaled = read_target_inundation_temporal()[['percent_inundation']]
+    predictions = pd.concat([inundation_unscaled, predictions])
+
+    # Define the folder path
+    folder_path = f"predictions/inundation_predictions_{future_dates[0]}_to_{future_dates[-1]}"
+
+    # Create the folder if it doesn't exist
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+        print(f"Folder created: {folder_path}")
+    else:
+        print(f"Folder already exists: {folder_path}")
+
     # Export predictions as CSV
-	predictions.to_csv(f'{folder_path}/{future_dates[0]}_to_{future_dates[-1]}.csv')
+    predictions.to_csv(f'{folder_path}/{future_dates[0]}_to_{future_dates[-1]}.csv')
 
 
 def export_graphs(data, future_dates, inundation_pred, lower_bound_unscaled_inundation,
@@ -558,6 +663,7 @@ def main():
 	    update_data()
 	    data = create_dataframe()
 	    future_dates = get_future_dates(data)
+	    retrain_temporal_model(data)
 	    # y_pred, X_pred, model_delta, ci_lower, ci_upper = predict_new_inundation_rf(data)
 	    # inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled = re_scale_predictions(data, y_pred, X_pred, future_dates, model_delta, monte_carlo=False, lower_bounds=ci_lower, upper_bounds=ci_upper)
 	    y_pred, X_pred, model_delta = predict_new_inundation_transformer(data)
@@ -565,7 +671,6 @@ def main():
 	    export_csv(inundation_pred, lb_pred, ub_pred, future_dates)
 	    export_graphs(data, future_dates, inundation_pred, lb_pred, ub_pred, inundation_temporal_unscaled)
 	    print_trigger(inundation_pred, future_dates)
-	    make_spatial_prediction.run_full_spatial_analysis()
 	    plot_explanations.get_explanations()
 
 	    logging.info(f"Predictions exported.")

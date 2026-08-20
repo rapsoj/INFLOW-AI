@@ -117,8 +117,21 @@ def _validate_moisture_netcdf_file(netcdf_path):
 		raise RuntimeError(f"Invalid moisture NetCDF file '{netcdf_path}': {e}") from e
 
 
-def _get_latest_valid_moisture_netcdf(extract_folder):
-	"""Return most recent readable moisture NetCDF from extract folder."""
+def _moisture_netcdf_date_range(netcdf_path):
+	with nc.Dataset(netcdf_path, mode="r") as ds:
+		time_var = ds.variables["time"]
+		dates = nc.num2date(
+			time_var[:],
+			units=time_var.units,
+			calendar=getattr(time_var, "calendar", "standard"),
+			only_use_cftime_datetimes=False,
+			only_use_python_datetimes=False,
+		)
+	return pd.Timestamp(dates[0]).normalize(), pd.Timestamp(dates[-1]).normalize()
+
+
+def _get_latest_valid_moisture_netcdf(extract_folder, required_start=None, required_end=None):
+	"""Return most recent readable moisture NetCDF covering the required range."""
 	list_of_files = sorted(
 		glob.glob(os.path.join(os.getcwd(), extract_folder, "*.nc")),
 		key=os.path.getctime,
@@ -131,6 +144,11 @@ def _get_latest_valid_moisture_netcdf(extract_folder):
 	for path in list_of_files:
 		try:
 			_validate_moisture_netcdf_file(path)
+			file_start, file_end = _moisture_netcdf_date_range(path)
+			if required_start is not None and file_start > pd.Timestamp(required_start):
+				raise RuntimeError(f"coverage starts at {file_start.date()}, before required {pd.Timestamp(required_start).date()}")
+			if required_end is not None and file_end < pd.Timestamp(required_end):
+				raise RuntimeError(f"coverage ends at {file_end.date()}, before required {pd.Timestamp(required_end).date()}")
 			return path
 		except Exception as e:
 			errors.append(f"{os.path.basename(path)}: {e}")
@@ -176,19 +194,23 @@ def download_new_gridded_moisture(download_folder, target_product=None):
 	local_product_path = os.path.join(os.getcwd(), GR_MOISTURE_DOWNLOAD_PATH)
 	local_dates = cleaning_utils.get_local_download_dates(local_product_path)
 	missing_dates = [d for d in new_dates if d not in local_dates]
+	required_start = min(local_dates) if local_dates else last_date
+	required_end = max(local_dates) if local_dates else current_date_str
 
 	if missing_dates:
 		download_range = [missing_dates[0], missing_dates[-1]]
 		download_gridded_moisture(download_range, download_path_full)
-		extract_gridded_moisture(download_range, download_folder)
-		_get_latest_valid_moisture_netcdf(EXTRACTED_DOMAIN_PATH)
+		# Extraction must include the full cached archive, not only newly missing days.
+		extract_range = [required_start, required_end] if local_dates else download_range
+		extract_gridded_moisture(extract_range, download_folder)
+		_get_latest_valid_moisture_netcdf(EXTRACTED_DOMAIN_PATH, required_start, required_end)
 	else:
 		try:
-			_get_latest_valid_moisture_netcdf(EXTRACTED_DOMAIN_PATH)
+			_get_latest_valid_moisture_netcdf(EXTRACTED_DOMAIN_PATH, required_start, required_end)
 		except RuntimeError:
 			if local_dates:
 				extract_gridded_moisture([min(local_dates), max(local_dates)], download_folder)
-				_get_latest_valid_moisture_netcdf(EXTRACTED_DOMAIN_PATH)
+				_get_latest_valid_moisture_netcdf(EXTRACTED_DOMAIN_PATH, required_start, required_end)
 			else:
 				raise
 
@@ -227,9 +249,9 @@ def export_decadal_geotiffs(extract_folder, output_folder, target_product="modis
 
 		lon_min = lons.min()
 		lat_max = lats.max()
-		pixel_size_x = lons[1] - lons[0]
-		pixel_size_y = lats[1] - lats[0]
-		transform = from_origin(lon_min, lat_max, pixel_size_x, -pixel_size_y)
+		pixel_size_x = abs(lons[1] - lons[0])
+		pixel_size_y = abs(lats[1] - lats[0])
+		transform = from_origin(lon_min, lat_max, pixel_size_x, pixel_size_y)
 
 		for group, indices in tqdm(
 			zip(date_groups, grouped_indices),
@@ -248,6 +270,8 @@ def export_decadal_geotiffs(extract_folder, output_folder, target_product="modis
 				sum_2d += arr_2d
 
 			decadal_avg = sum_2d / float(len(indices))
+			if lats[0] < lats[-1]:
+				decadal_avg = np.flipud(decadal_avg)
 
 			first_dekad_str = group[0].strftime("%Y%m%d")
 			output_file = os.path.join(output_folder, f"moisture_decadal_{first_dekad_str}.tif")
@@ -355,6 +379,32 @@ def update_gridded_moisture(
 	"""Combine newly downloaded gridded moisture with existing data."""
 	try:
 		target_product = cleaning_utils.resolve_target_product(None)
+		local_dates = cleaning_utils.get_local_download_dates(os.path.join(os.getcwd(), download_path))
+		needs_rebuild = False
+		if os.path.exists(GR_MOISTURE_H5_PATH) and os.path.exists(temporal_data_path):
+			with h5py.File(GR_MOISTURE_H5_PATH, "r") as hdf:
+				dset = hdf.get("moisture")
+				if dset is None or dset.shape[0] == 0:
+					needs_rebuild = True
+				else:
+					sample_indices = np.linspace(0, dset.shape[0] - 1, min(3, dset.shape[0]), dtype=int)
+					needs_rebuild = not any(np.any(dset[index] != 0) for index in sample_indices)
+			if needs_rebuild:
+				logging.info("Moisture H5 contains no non-zero samples; rebuilding H5 and CSV.")
+
+		if local_dates and os.path.exists(temporal_data_path):
+			historic_dates = get_historic_dates(temporal_data_path)
+			if historic_dates and min(local_dates) < min(historic_dates):
+				needs_rebuild = True
+				logging.info(
+					"Moisture history starts at %s but local archive starts at %s; rebuilding H5 and CSV.",
+					min(historic_dates),
+					min(local_dates),
+				)
+			if needs_rebuild:
+				for path in (GR_MOISTURE_H5_PATH, temporal_data_path):
+					if os.path.exists(path):
+						os.remove(path)
 
 		if os.path.exists(GR_MOISTURE_H5_PATH) and os.path.exists(temporal_data_path):
 			crop_historic_data(

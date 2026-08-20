@@ -9,6 +9,7 @@ from sklearn.metrics import f1_score, mean_absolute_error, precision_score, reca
 @dataclass
 class ModelMetrics:
     calibration: float
+    ci95_percent_better_than_std: float
     twcrps: float
     mae: float
     rmse: float
@@ -18,6 +19,8 @@ class ModelMetrics:
     peak_recall: float
     peak_auc: float
     peak_f1: float
+    true_event_rate: float
+    pred_event_rate: float
 
     def to_dict(self) -> dict[str, float]:
         return asdict(self)
@@ -55,7 +58,7 @@ def compute_metrics(
     y_true_raw: np.ndarray,
     y_pred_raw: np.ndarray,
     y_pred_samples_raw: np.ndarray | None = None,
-    dry_season_baseline: float | None = None,
+    dry_season_baseline: float | np.ndarray | None = None,
     event_change_threshold: float = 0.05,
 ) -> ModelMetrics:
     y_true = y_true_raw.astype(np.float64)
@@ -73,6 +76,20 @@ def compute_metrics(
     upper_95 = np.quantile(y_pred_samples, 0.975, axis=0)
     coverage_95 = np.mean((y_true >= lower_95) & (y_true <= upper_95))
 
+    # Baseline interval: point prediction +/- 1 predictive std (~68% under normality).
+    pred_std = np.std(y_pred_samples, axis=0)
+    lower_std = y_pred - pred_std
+    upper_std = y_pred + pred_std
+    coverage_std = np.mean((y_true >= lower_std) & (y_true <= upper_std))
+
+    target_coverage = 0.95
+    err_95 = abs(float(coverage_95) - target_coverage)
+    err_std = abs(float(coverage_std) - target_coverage)
+    if err_std <= 1e-12:
+        ci95_percent_better_than_std = 0.0
+    else:
+        ci95_percent_better_than_std = float(((err_std - err_95) / err_std) * 100.0)
+
     crps_series = _empirical_crps(y_true, y_pred_samples)
     twcrps = _time_weighted_mean(crps_series)
 
@@ -84,17 +101,33 @@ def compute_metrics(
     if dry_season_baseline is None:
         dry_season_baseline = float(np.nanmin(y_true))
 
-    denom = max(abs(dry_season_baseline), 1e-6)
-    true_events = ((y_true - dry_season_baseline) / denom) >= event_change_threshold
-    pred_events = ((y_pred - dry_season_baseline) / denom) >= event_change_threshold
+    baseline_arr = np.asarray(dry_season_baseline, dtype=np.float64)
+    if baseline_arr.ndim == 0:
+        baseline_arr = np.full_like(y_true, float(baseline_arr), dtype=np.float64)
+    if baseline_arr.shape != y_true.shape:
+        raise ValueError(
+            "dry_season_baseline must be scalar or have the same shape as y_true_raw."
+        )
+
+    denom = np.maximum(np.abs(baseline_arr), 1e-6)
+    rel_true = (y_true - baseline_arr) / denom
+    rel_pred = (y_pred - baseline_arr) / denom
+
+    true_events = rel_true >= event_change_threshold
+    pred_events = rel_pred >= event_change_threshold
+    event_score = rel_pred
 
     peak_precision = float(precision_score(true_events, pred_events, zero_division=0))
     peak_recall = float(recall_score(true_events, pred_events, zero_division=0))
     peak_f1 = float(f1_score(true_events, pred_events, zero_division=0))
-    peak_auc = _safe_auc(true_events.astype(int), y_pred)
+    peak_auc = _safe_auc(true_events.astype(int), event_score)
+
+    true_event_rate = float(np.mean(true_events.astype(np.float64)))
+    pred_event_rate = float(np.mean(pred_events.astype(np.float64)))
 
     return ModelMetrics(
         calibration=float(coverage_95),
+        ci95_percent_better_than_std=ci95_percent_better_than_std,
         twcrps=twcrps,
         mae=mae,
         rmse=rmse,
@@ -104,4 +137,6 @@ def compute_metrics(
         peak_recall=peak_recall,
         peak_auc=peak_auc,
         peak_f1=peak_f1,
+        true_event_rate=true_event_rate,
+        pred_event_rate=pred_event_rate,
     )

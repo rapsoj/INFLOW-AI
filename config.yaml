@@ -79,6 +79,7 @@ ablation:
   enabled: true
   pipeline:
     target_column: "percent_inundation_ssd"
+    imputation_warning_threshold: 0.10
     drop_metadata_columns: true
     forecast_horizon_periods: "auto_two_months"
     forecast_horizon_months: 2

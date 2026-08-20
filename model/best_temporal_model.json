@@ -131,12 +131,12 @@
   "metrics_target_space": "raw",
   "model_architecture": "random_forest",
   "model_type": "random_forest",
-  "model_weights_path": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead4_20260820T163848Z.pkl",
+  "model_weights_path": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead4_20260820T194651Z.pkl",
   "model_weights_path_by_lead": {
-    "1": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead1_20260820T163848Z.pkl",
-    "2": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead2_20260820T163848Z.pkl",
-    "3": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead3_20260820T163848Z.pkl",
-    "4": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead4_20260820T163848Z.pkl"
+    "1": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead1_20260820T194651Z.pkl",
+    "2": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead2_20260820T194651Z.pkl",
+    "3": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead3_20260820T194651Z.pkl",
+    "4": "model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead4_20260820T194651Z.pkl"
   },
   "peak_auc": NaN,
   "peak_f1": 0.0,
@@ -150,7 +150,7 @@
   "rmse": 0.0150580826423617,
   "roc_auc": NaN,
   "run_id": "20260820T143849Z",
-  "runtime_retrained_at": "20260820T163848Z",
+  "runtime_retrained_at": "20260820T194651Z",
   "runtime_retrained_until_target_date": "2026-08-01",
   "seed": 42,
   "selected_feature_count": 8.0,

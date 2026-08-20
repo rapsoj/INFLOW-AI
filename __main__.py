@@ -24,6 +24,7 @@ from model.ablation.deployment import (
     write_best_model_metadata,
 )
 from explanations.shap_explanations import export_lead_waterfall_plots
+from explanations.feature_history import export_feature_history_plots
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -434,6 +435,10 @@ def main() -> None:
             runtime_row,
             _prediction_output_dir(bundle.target_column, bundle.future_dates),
         )
+        feature_history_paths = export_feature_history_plots(
+            runtime_row,
+            _prediction_output_dir(bundle.target_column, bundle.future_dates),
+        )
         performance_path = update_forecast_performance_csv(bundle)
         graph_paths = export_graphs(bundle)
         area_metadata = target_area_conversion_metadata(bundle.target_column)
@@ -449,6 +454,7 @@ def main() -> None:
         logging.info("Model performance report written to %s", model_report_path)
         for shap_path in shap_paths:
             logging.info("SHAP explanation written to %s", shap_path)
+        logging.info("Feature history plots written: %d", len(feature_history_paths))
         logging.info("Forecast performance ledger written to %s", performance_path)
         for graph_path in graph_paths:
             logging.info("Graph written to %s", graph_path)

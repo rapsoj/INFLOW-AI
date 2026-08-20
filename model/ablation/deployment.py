@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import timedelta
 import ast
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -297,7 +298,29 @@ def _apply_saved_feature_transforms(
 
     imputer = scaler_bundle["imputer"]
     scaler = scaler_bundle["scaler"]
-    full_imputed = imputer.transform(features_df[feature_cols])
+    raw_features = features_df[feature_cols]
+    missing_cells = int(raw_features.isna().sum().sum())
+    total_cells = int(raw_features.shape[0] * raw_features.shape[1])
+    imputation_ratio = missing_cells / total_cells if total_cells else 0.0
+    warning_threshold = float(get_cfg("ablation.pipeline.imputation_warning_threshold", 0.10))
+    if imputation_ratio >= warning_threshold:
+        logging.warning(
+            "High degree of imputation in deployment predictors: %.1f%% of feature cells "
+            "(%d/%d) will be imputed; threshold is %.1f%%.",
+            imputation_ratio * 100.0,
+            missing_cells,
+            total_cells,
+            warning_threshold * 100.0,
+        )
+    else:
+        logging.info(
+            "Deployment predictor imputation: %.2f%% of feature cells (%d/%d).",
+            imputation_ratio * 100.0,
+            missing_cells,
+            total_cells,
+        )
+
+    full_imputed = imputer.transform(raw_features)
     full_scaled = scaler.transform(full_imputed)
     scaled_df = pd.DataFrame(full_scaled, columns=feature_cols, index=features_df.index)
     scaled_df.insert(0, "date", features_df["date"].values)

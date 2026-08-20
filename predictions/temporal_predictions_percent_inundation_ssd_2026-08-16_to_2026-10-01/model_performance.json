@@ -89,9 +89,9 @@
     "rmse": 0.0150580826423617,
     "twcrps": 0.0065962292246949
   },
-  "runtime_retrained_at": "20260820T163848Z",
+  "runtime_retrained_at": "20260820T194651Z",
   "runtime_retrained_until_target_date": "2026-08-01",
-  "runtime_weight_paths_by_lead": "{\"1\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead1_20260820T163848Z.pkl\", \"2\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead2_20260820T163848Z.pkl\", \"3\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead3_20260820T163848Z.pkl\", \"4\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead4_20260820T163848Z.pkl\"}",
+  "runtime_weight_paths_by_lead": "{\"1\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead1_20260820T194651Z.pkl\", \"2\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead2_20260820T194651Z.pkl\", \"3\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead3_20260820T194651Z.pkl\", \"4\": \"model/ablation/artifacts/runtime_retrained_weights/random_forest_viirs_seasonally_differenced_runtime_fullhistory_lead4_20260820T194651Z.pkl\"}",
   "preprocessing_artifacts": {
     "scaler_path": "model/ablation/artifacts/scalers/scaler_viirs_random_forest_seasonally_differenced_20260820T143849Z.pkl",
     "pca_enabled": 0.0,

@@ -1,212 +1,111 @@
-# INFLOW-AI Flood Inundation Prediction Model
+# INFLOW-AI Flood Inundation Prediction
 
-## Overview
-This program is a machine learning model designed to predict flood inundation coverage over the INFLOW study area. It leverages satellite data, transformer modls, and Monte Carlo simulations to generate 2-month predictions and 95% confidence intervals. It also automates the processing, normalisation, and visualisation of data, providing actionable insights into flood dynamics in the While Nile basin.
+INFLOW-AI downloads and processes hydrological, satellite, rainfall, moisture, lake-level, and teleconnection data for the INFLOW study area. It trains and evaluates temporal ablation models, retrains the selected model on the latest available history, and produces two-month inundation forecasts with uncertainty intervals and explanations.
 
-![Timelapse GIF](https://raw.githubusercontent.com/rapsoj/INFLOW-AI/main/predictions/graphs/timelase-compressed.gif)
-
-*Inundation masks of the White Nile basin from the MODIS satellite mission.*
-
----
-
-## Table of Contents
-1. [Requirements](#requirements)  
-2. [Installation](#installation)  
-3. [Usage](#usage)  
-4. [Program Workflow](#program-workflow)  
-5. [Model Description](#model-description)
-6. [License](#licence)
-7. [Contact](#contact)
-
----
+![Latest year-by-year comparison](predictions/temporal_predictions_percent_inundation_ssd_2026-08-16_to_2026-10-01/prediction_year_by_year_comparison.png)
 
 ## Requirements
-- Python 3.11 or higher
-- Required Python libraries:
-  - `datetime==5.5`
-  - `geopandas==1.0.1`
-  - `h5py==3.12.1`
-  - `loguru==0.7.3`
-  - `matplotlib==3.10.0`
-  - `netCDF4==1.7.2`
-  - `numpy==1.26.4`
-  - `pandas==2.2.2`
-  - `pathlib==1.0.1`
-  - `py_hydroweb==1.0.2`
-  - `rasterio==1.4.3`
-  - `requests==2.32.3`
-  - `scikit-learn==1.6.1`
-  - `scipy==1.13.1`
-  - `tensorflow==2.18.0`
-  - `tqdm>=4.66.1`
-  - `typer==0.15.1`
-  - `wget==3.2`
-  - `xarray==2025.1.1`
-- Operating system: Windows, macOS, or Linux
 
----
+- Python 3.11 or newer
+- macOS, Linux, or Windows
+- Network access for the first data download and later source updates
 
-## Installation
-1. Clone the repository:
-'git clone https://github.com/your-repository/flood-inundation-prediction.git`
-`cd flood-inundation-prediction`
+Install dependencies in a virtual environment:
 
-2. Download the data:
-   - Data can be downloaded from the [Google Drive](https://drive.google.com/drive/folders/1TW4Vfhu9SrrVrvonclicaWqy5hHBY7vv?usp=sharing)
-   - Save the folder as `data` in the parent directory
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python3 -m pip install -r requirements.txt
+```
 
-4. Set up a virtual environment (optional but recommended):
-`python3 -m venv env source env/bin/activate # On Windows, use env\Scripts\activate`
+## First Run
 
-5. Install the required libraries:
-`pip install -r requirements.txt`
+1. Review [config.yaml](config.yaml), especially `runtime.target_product`.
+2. Run the ablation experiments:
 
+```bash
+python3 -m model.ablation.run_ablation
+```
 
----
+3. Run the prediction pipeline:
 
-## Usage
-1. **Data Preparation**: Ensure your input data file `temporal_data_seasonal_df.csv` is correctly formatted and located in the designated folder (`/data` by default).
-2. **Run the Program**: Use the following command to start the program:
+```bash
+python3 __main__.py
+```
 
-`python __main__.py`
+The first data run takes substantially longer. It downloads and builds the historic record for the spatial and temporal datasets, including HDF5 files and aligned temporal CSVs. Later runs update only the available period.
 
-3. **Visualisation**: After execution, view the generated graphs and reports in the `/output` directory.
+No external data folder needs to be downloaded or copied into the repository. The pipeline creates its required data products under `data/`.
 
-4. **Run Ablation Experiments**:
-`python -m model.ablation.run_ablation --models random_forest,gradient_boosting,elastic_net --cutoff-dates 2025-12-31 --autoregressive-values yes,no --target-types raw,first_differenced,deseasonalised,seasonally_differenced,differenced_anomaly --inundation-products viirs,modis --seed 42`
+## Outputs
 
-This writes:
-- model weights (`.pkl`) to `model/ablation/models/weights/`
-- experiment metadata and performance metrics to `model/ablation/ablation_experiment_log.csv`
+The main run writes forecasts under `predictions/`, including:
 
-<img src="https://i.imgur.com/m8T8OQW.png" alt="Predictions compared with past year" width="600"/>
+- `temporal_predictions.csv`: historical values and future predictions
+- `model_performance.json`: selected model, test metrics, preprocessing, and runtime retraining metadata
+- `prediction_year_by_year_comparison.png` and other forecast plots
+- `explanations/shap_waterfall_lead_*.png`: SHAP driver plots for each forecast lead
+- `explanations/shap_metadata.json`: explanation metadata and contribution percentages
 
-<img src="https://i.imgur.com/NUFHPcr.png" alt="Predictions compared with past five years" width="600"/>
+A cumulative forecast ledger is written to `predictions/forecast_performance.csv`.
 
----
+## Configuration
 
-## Program Workflow
-1. **Data Ingestion**: 
-- The program reads temporal and baseline data from CSV files.
-2. **Data Normalisation**: 
-- Data is scaled to ensure compatibility with machine learning models.
-3. **Model Training**: 
-- Trains a regression model on the baseline data.
-4. **Monte Carlo Simulation**: 
-- Generates predictions and confidence intervals based on 10,000 iterations.
-5. **Visualisation**: 
-- Produces heatmaps and time-series plots of flood inundation predictions.
-6. **Output**: 
-- Saves prediction data and visualisations in the `/output` directory.
+The main settings are in [config.yaml](config.yaml).
 
----
+### Runtime
 
-## Ablation Pipeline
+```yaml
+runtime:
+  target_product: "viirs"   # viirs or modis
+```
 
-The repository now includes a dedicated ablation framework in `model/ablation/` with:
+The target product controls the inundation source, aligned historic directory, temporal cadence, and forecast target.
 
-- One class per model in its own Python file:
-  - `model/ablation/models/random_forest_model.py`
-  - `model/ablation/models/gradient_boosting_model.py`
-  - `model/ablation/models/elastic_net_model.py`
-- Corresponding serialized model weight files as `.pkl` artifacts in:
-  - `model/ablation/models/weights/`
-- Reproducibility controls:
-  - Global random seed set for `random`, `numpy`, and TensorFlow (if available)
-- Experiment tracking in a single CSV log:
-  - `model/ablation/ablation_experiment_log.csv`
+### Ablation experiments
 
-Each logged experiment row includes:
+The `ablation.experiments` section controls the experiment grid:
 
-- Ablation dimensions:
-  - `model_type`
-  - `training_cutoff_date`
-  - `autoregressive`
-  - `target_type` (`raw`, `first_differenced`, `deseasonalised`, `seasonally_differenced`, `differenced_anomaly`)
-  - `inundation_product` (`viirs` or `modis`)
-  - `seed`
-- Dataset properties:
-  - source path, row counts, feature count
-  - date range
-  - target mean/std
-  - dataset fingerprint hash
-- Performance metrics:
-  - `calibration`
-  - `twcrps`
-  - `mae`
-  - `rmse`
-  - `quantile_loss_95`
-  - `quantile_loss_99`
-  - `peak_precision`
-  - `peak_recall`
-  - `peak_auc`
-  - `peak_f1`
+- `models`
+- `training_cutoff_dates`
+- `autoregressive_values`
+- `target_types`
+- `inundation_products`
+- `seed`
+- `log_path`
 
+The `ablation.pipeline` section controls shared model preparation:
 
----
+- `target_column`
+- forecast horizon
+- calendar features
+- target and feature lag blocks
+- lag steps such as `[1, 2, 3, 6, 12]`
+- feature selection thresholds and candidate feature counts
+- optional PCA
 
-## Model Description
+Experiment weights, scalers, feature-selection caches, PCA artifacts, and runtime-retrained weights are stored beneath the configured `ablation.artifacts.base_dir`.
 
-This model is a **Temporal Transformer-based Recurrent Model** designed for sequence prediction. It leverages the transformer architecture for capturing long-range dependencies and incorporates Monte Carlo Dropout for uncertainty estimation. Below is a detailed breakdown of its components and functionality.
+## Ablation Results
 
-### Model Architecture
+The ablation runner records experiment metadata and metrics in:
 
-- **Input**: The model takes in sequences of temporal data, where each sequence consists of multiple features. The input shape is `(seq_len, num_features)`, where `seq_len` represents the length of the input sequence (e.g., number of time steps), and `num_features` is the number of features at each time step.
+```text
+model/ablation/ablation_experiment_log.csv
+```
 
-- **Positional Encoding**: 
-  - The model incorporates **positional encoding** to capture the order of the time steps in the input sequence. This encoding is added to the input data before being fed into the transformer encoder. The positional encoding is generated using a sinusoidal function, which is common in transformer models for sequence processing.
+It stores the selected experiment metadata in:
 
-- **Transformer Encoder**: 
-  - The core of the model is the **Transformer Encoder**, which processes the sequential input data. The encoder consists of multi-head self-attention layers and feed-forward layers, both equipped with dropout regularisation and layer normalisation.
-  - The attention mechanism allows the model to focus on different parts of the sequence when making predictions, and the feed-forward layers learn non-linear relationships.
-  
-- **Feed-forward Network**:
-  - After the transformer encoder, a feed-forward network is applied, consisting of dense layers with ReLU activations. This network helps the model to learn more complex patterns in the data.
+```text
+model/best_temporal_model.json
+```
 
-- **Output**: 
-  - The final output layer produces `predict_ahead` predictions, which represent the forecasted values for the next `predict_ahead` time steps. The output is a dense layer with no activation function (i.e., linear output).
-
-### Loss Function
-
-The model uses a **custom loss function** that combines the Mean Squared Error (MSE) with two additional penalties:
-1. **Sign Penalty**: A penalty term that penalises predictions where the sign of the predicted values does not match the sign of the true values. This helps the model to maintain consistency in the directionality of the predictions.
-2. **Sum Penalty**: A penalty that ensures the sum of predicted values closely matches the sum of true values across all time steps in the sequence. This is particularly useful in temporal data where the overall trend or aggregate behavior of the series is important.
-
-The final loss is calculated as a weighted combination of the MSE, sign penalty, and sum penalty.
-
-### Training Process
-
-- **Data Preparation**: The data is preprocessed into overlapping sequences with a specified `look_back` window (past observations) and `predict_ahead` (future steps to predict).
-  
-- **Monte Carlo Dropout**: The model employs **Monte Carlo Dropout** during inference to estimate uncertainty in the predictions. Dropout is kept active during prediction to generate multiple stochastic predictions, from which the mean and standard deviation are computed to capture the uncertainty in the model’s forecasts.
-
-- **Early Stopping**: During training, **early stopping** is used to prevent overfitting by monitoring the validation loss and stopping training when the performance plateaus for a specified number of epochs.
-
-- **Optimisation**: The model is compiled using the **Adam optimiser** with a learning rate of 0.0001, and the model is trained to minimise the custom loss function.
-
-### Model Evaluation
-
-- After training, the model is evaluated using the **mean squared error (MSE)** and **mean absolute error (MAE)** metrics on the test data.
-- The model’s predictions are compared against the actual values, and the performance metrics are printed for analysis.
-
-### Model Saving and Loading
-
-- The trained model can be saved for later use using the `.save()` method and can be loaded back using the `load_model()` function from TensorFlow/Keras for inference.
-
-### Key Features:
-- Transformer-based architecture with multi-head attention.
-- Monte Carlo Dropout for uncertainty estimation.
-- Custom loss function with penalties for sign consistency and sum preservation.
-- Early stopping to prevent overfitting.
-- Model evaluation using MSE and MAE.
-
----
+The main pipeline consumes that metadata, uses the selected feature subsets and transformations, retrains the same model architecture on current data, and then forecasts.
 
 ## License
-This project is licensed under the [MIT License](https://github.com/rapsoj/INFLOW-AI/blob/main/LICENCE.txt).
 
----
+This project is licensed under the [MIT License](LICENCE.md).
 
 ## Contact
-For questions or issues, please contact:
-- Email: jessica.rapson@algorithmicgovernance.org
+
+For questions or issues, contact Jessica Rapson at jessica.rapson@algorithmicgovernance.org.

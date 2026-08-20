@@ -1,5 +1,4 @@
 data/
-predictions/
 model/testing/
 *.pkl
 *.h5

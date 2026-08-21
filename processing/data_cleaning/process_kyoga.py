@@ -168,9 +168,13 @@ def update_kyoga(target_product=None):
         kyoga = kyoga[kyoga.index >= min_date]
 
         # Save the processed data
+<<<<<<< HEAD
         output_path = cleaning_utils.get_target_historic_path("kyoga.csv", target_product)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         kyoga.to_csv(output_path, index=True)
+=======
+        kyoga.to_csv(KYOGA_OUTPUT_PATH, index=True)
+>>>>>>> origin/main
         print("Kyoga data processing completed successfully.")
         
     except Exception as e:

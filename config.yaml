@@ -1,5 +1,9 @@
 sources:
+<<<<<<< HEAD
   viirs_base_url: "https://gws-access.jasmin.ac.uk/public/tamsat/INFLOW/FEWSNET_SouthSudan/UofReading/Geotiffs/"
+=======
+  viirs_base_url: "https://edcftp.cr.usgs.gov/project/FEWSNET/spervez/Togofiles/SouthSudan/UofReading/Geotiffs/"
+>>>>>>> origin/main
   modis_base_url: "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask"
   rainfall_url: "https://gws-access.jasmin.ac.uk/public/tamsat/INFLOW/rainfall/rfe_time-series/combined/rfe_19830101-present_Lake-Victoria.csv"
   lake_levels:
@@ -28,6 +32,7 @@ paths:
     tamsat_sm_daily: "data/downloads/tamsat/soil_moisture/data/v2.3.1/daily"
     tamsat_sm_dekads: "data/downloads/tamsat/soil_moisture/dekads"
   historic:
+<<<<<<< HEAD
     root: "data/historic"
     inundation_h5: "data/historic/viirs-aligned/inundation_viirs.h5"
     inundation_temporal: "data/historic/viirs-aligned/inundation_viirs_temporal.csv"
@@ -46,6 +51,24 @@ paths:
     gridded_moisture_h5: "data/historic/viirs-aligned/gridded_moisture.h5"
     gridded_rainfall_cumulative_temporal: "data/historic/viirs-aligned/gridded_rainfall_cumulative_temporal.csv"
     gridded_rainfall_cumulative_h5: "data/historic/viirs-aligned/gridded_rainfall_cumulative.h5"
+=======
+    inundation_h5: "data/historic/inundation_viirs.h5"
+    inundation_temporal: "data/historic/inundation_viirs_temporal.csv"
+    modis_temporal: "data/historic/inundation_modis_temporal.csv"
+    viirs_h5: "data/historic/inundation_viirs.h5"
+    viirs_temporal: "data/historic/inundation_viirs_temporal.csv"
+    teleconnections: "data/historic/teleconnections.csv"
+    rainfall: "data/historic/rainfall.csv"
+    albert: "data/historic/albert.csv"
+    victoria: "data/historic/victoria.csv"
+    kyoga: "data/historic/kyoga.csv"
+    gridded_rainfall_temporal: "data/historic/gridded_rainfall_temporal.csv"
+    gridded_rainfall_h5: "data/historic/gridded_rainfall.h5"
+    gridded_moisture_temporal: "data/historic/gridded_moisture_temporal.csv"
+    gridded_moisture_h5: "data/historic/gridded_moisture.h5"
+    gridded_rainfall_cumulative_temporal: "data/historic/gridded_rainfall_cumulative_temporal.csv"
+    gridded_rainfall_cumulative_h5: "data/historic/gridded_rainfall_cumulative.h5"
+>>>>>>> origin/main
   maps:
     catchments: "data/maps/inflow_catchments/INFLOW_all_cmts.shp"
     admin0: "data/maps/admin_boundaries/ssd_admbnda_adm0_imwg_nbs_20230829.shp"
@@ -74,6 +97,7 @@ runtime:
       - "HYDROWEB_LAKES_OPE/HYDROWEB_LAKES_OPE/hydroprd_L_albert.txt"
   teleconnections:
     min_date: "2002-07-01"
+<<<<<<< HEAD
 
 ablation:
   enabled: true
@@ -119,3 +143,5 @@ ablation:
   artifacts:
     base_dir: "model/ablation/artifacts"
 
+=======
+>>>>>>> origin/main

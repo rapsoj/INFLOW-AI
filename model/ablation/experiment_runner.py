@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+<<<<<<< HEAD
 import json
 import os
 import sys
@@ -17,14 +18,31 @@ from processing.config import get_cfg
 from .data_pipeline import TargetType, prepare_dataset, reconstruct_raw_from_transformed
 from .experiment_logger import ExperimentLogger
 from .feature_selection import select_features_with_cv
+=======
+import os
+import traceback
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from typing import Any, Iterable
+
+import numpy as np
+
+from .data_pipeline import TargetType, prepare_dataset
+from .experiment_logger import ExperimentLogger
+>>>>>>> origin/main
 from .metrics import compute_metrics
 from .models import MODEL_REGISTRY
 from .utils import set_global_seed
 
+<<<<<<< HEAD
 ARTIFACTS_DIR = Path(get_cfg("ablation.artifacts.base_dir", "model/ablation/artifacts"))
 LOG_PATH = str(get_cfg("ablation.experiments.log_path", "model/ablation/ablation_experiment_log.csv"))
 WEIGHTS_DIR = ARTIFACTS_DIR / "experiment_weights"
 BEST_MODEL_INFO_PATH = Path("model") / "best_temporal_model.json"
+=======
+LOG_PATH = "model/ablation/ablation_experiment_log.csv"
+WEIGHTS_DIR = "model/ablation/models/weights"
+>>>>>>> origin/main
 
 
 @dataclass
@@ -41,6 +59,7 @@ def _run_id() -> str:
     return datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
 
 
+<<<<<<< HEAD
 def _weights_path(
     model_type: str,
     inundation_product: str,
@@ -63,6 +82,14 @@ def _weights_path(
 def _write_best_model_metadata(row: dict[str, Any]) -> None:
     BEST_MODEL_INFO_PATH.parent.mkdir(parents=True, exist_ok=True)
     BEST_MODEL_INFO_PATH.write_text(json.dumps(row, indent=2, default=str), encoding="utf-8")
+=======
+def _weights_path(model_type: str, inundation_product: str, target_type: str, autoregressive: bool, cutoff: str, run_id: str) -> str:
+    safe_cutoff = cutoff.replace("-", "")
+    ar_flag = "ar" if autoregressive else "noar"
+    filename = f"{model_type}_{inundation_product}_{target_type}_{ar_flag}_{safe_cutoff}_{run_id}.pkl"
+    os.makedirs(WEIGHTS_DIR, exist_ok=True)
+    return os.path.join(WEIGHTS_DIR, filename)
+>>>>>>> origin/main
 
 
 def _as_log_row(config: AblationConfig, run_id: str, status: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -76,6 +103,7 @@ def _as_log_row(config: AblationConfig, run_id: str, status: str, payload: dict[
     return base
 
 
+<<<<<<< HEAD
 def _progress_bar(current: int, total: int, width: int = 30) -> str:
     if total <= 0:
         return "[complete]"
@@ -164,6 +192,8 @@ def _flatten_metrics_by_lead(lead_metrics: dict[int, dict[str, float]]) -> dict[
     return flattened
 
 
+=======
+>>>>>>> origin/main
 def run_single_ablation(config: AblationConfig, logger: ExperimentLogger | None = None) -> dict[str, Any]:
     if logger is None:
         logger = ExperimentLogger(LOG_PATH)
@@ -178,11 +208,16 @@ def run_single_ablation(config: AblationConfig, logger: ExperimentLogger | None 
                 f"Available: {sorted(MODEL_REGISTRY.keys())}"
             )
 
+<<<<<<< HEAD
         configured_dataset = prepare_dataset(
+=======
+        dataset = prepare_dataset(
+>>>>>>> origin/main
             inundation_product=config.inundation_product,
             target_type=config.target_type,
             autoregressive=config.autoregressive,
             training_cutoff_date=config.training_cutoff_date,
+<<<<<<< HEAD
             run_id=run_id,
             model_type=config.model_type,
         )
@@ -336,6 +371,42 @@ def run_single_ablation(config: AblationConfig, logger: ExperimentLogger | None 
             **averaged_metrics,
             **{f"avg_{k}": v for k, v in averaged_metrics.items()},
             **flattened_lead_metrics,
+=======
+        )
+
+        model = MODEL_REGISTRY[config.model_type](seed=config.seed)
+        model.fit(dataset.X_train, dataset.y_train)
+
+        y_pred_transformed = model.predict(dataset.X_test)
+        y_pred_samples_transformed = model.predict_samples(dataset.X_test)
+
+        y_pred_raw = y_pred_transformed + dataset.raw_reconstruction_component_test
+        y_pred_samples_raw = y_pred_samples_transformed + dataset.raw_reconstruction_component_test[np.newaxis, :]
+
+        dry_baseline = float(np.nanmin(dataset.y_train_raw))
+        metrics = compute_metrics(
+            y_true_raw=dataset.y_test_raw,
+            y_pred_raw=y_pred_raw,
+            y_pred_samples_raw=y_pred_samples_raw,
+            dry_season_baseline=dry_baseline,
+            event_change_threshold=0.05,
+        )
+
+        model_path = _weights_path(
+            model_type=config.model_type,
+            inundation_product=config.inundation_product,
+            target_type=config.target_type,
+            autoregressive=config.autoregressive,
+            cutoff=config.training_cutoff_date,
+            run_id=run_id,
+        )
+        model.save_weights(model_path)
+
+        payload = {
+            "model_weights_path": model_path,
+            **dataset.properties,
+            **metrics.to_dict(),
+>>>>>>> origin/main
         }
         row = _as_log_row(config, run_id, "success", payload)
         logger.append(row)
@@ -354,6 +425,7 @@ def run_single_ablation(config: AblationConfig, logger: ExperimentLogger | None 
 
 def run_ablation_grid(configs: Iterable[AblationConfig], log_csv_path: str = LOG_PATH) -> list[dict[str, Any]]:
     logger = ExperimentLogger(log_csv_path)
+<<<<<<< HEAD
     configs = list(configs)
     results = []
 
@@ -378,6 +450,11 @@ def run_ablation_grid(configs: Iterable[AblationConfig], log_csv_path: str = LOG
             ),
         )
         _write_best_model_metadata(best)
+=======
+    results = []
+    for config in configs:
+        results.append(run_single_ablation(config, logger=logger))
+>>>>>>> origin/main
     return results
 
 

@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 
+<<<<<<< HEAD
 def _ordered_columns(columns: list[str]) -> list[str]:
     col_set = set(columns)
 
@@ -93,6 +94,8 @@ def _ordered_columns(columns: list[str]) -> list[str]:
     return ordered
 
 
+=======
+>>>>>>> origin/main
 class ExperimentLogger:
     def __init__(self, log_csv_path: str):
         self.log_csv_path = log_csv_path
@@ -102,12 +105,20 @@ class ExperimentLogger:
         row_df = pd.DataFrame([row])
         if os.path.exists(self.log_csv_path):
             existing = pd.read_csv(self.log_csv_path)
+<<<<<<< HEAD
             union_cols = _ordered_columns(list(set(existing.columns).union(set(row_df.columns))))
+=======
+            union_cols = sorted(set(existing.columns).union(set(row_df.columns)))
+>>>>>>> origin/main
             existing = existing.reindex(columns=union_cols)
             row_df = row_df.reindex(columns=union_cols)
             combined = pd.concat([existing, row_df], ignore_index=True)
         else:
+<<<<<<< HEAD
             union_cols = _ordered_columns(list(row_df.columns))
             combined = row_df.reindex(columns=union_cols)
+=======
+            combined = row_df
+>>>>>>> origin/main
 
         combined.to_csv(self.log_csv_path, index=False)

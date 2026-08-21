@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 
 from .experiment_runner import build_grid, run_ablation_grid
+<<<<<<< HEAD
 from processing.config import get_cfg
+=======
+>>>>>>> origin/main
 
 
 def _bool_values(csv: str) -> list[bool]:
@@ -23,7 +26,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run temporal inundation ablation studies.")
     parser.add_argument(
         "--models",
+<<<<<<< HEAD
         default="random_forest,gradient_boosting,elastic_net,linear_regression",
+=======
+        default="random_forest,gradient_boosting,elastic_net",
+>>>>>>> origin/main
         help="Comma-separated model types.",
     )
     parser.add_argument(
@@ -55,6 +62,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
+<<<<<<< HEAD
     if get_cfg("ablation.enabled", False):
         cfg_models = get_cfg("ablation.experiments.models", [])
         cfg_cutoffs = get_cfg("ablation.experiments.training_cutoff_dates", [])
@@ -81,6 +89,8 @@ def main() -> None:
             print(f"Log file: {cfg_log}")
             return
 
+=======
+>>>>>>> origin/main
     configs = build_grid(
         model_types=[m.strip() for m in args.models.split(",") if m.strip()],
         cutoff_dates=[d.strip() for d in args.cutoff_dates.split(",") if d.strip()],

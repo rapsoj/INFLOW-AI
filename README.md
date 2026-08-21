@@ -37,7 +37,18 @@ The first data run takes substantially longer. It downloads and builds the histo
 
 No external data folder needs to be downloaded or copied into the repository. The pipeline creates its required data products under `data/`.
 
+<<<<<<< HEAD
 ## Outputs
+=======
+4. **Run Ablation Experiments**:
+`python -m model.ablation.run_ablation --models random_forest,gradient_boosting,elastic_net --cutoff-dates 2025-12-31 --autoregressive-values yes,no --target-types raw,first_differenced,deseasonalised,seasonally_differenced,differenced_anomaly --inundation-products viirs,modis --seed 42`
+
+This writes:
+- model weights (`.pkl`) to `model/ablation/models/weights/`
+- experiment metadata and performance metrics to `model/ablation/ablation_experiment_log.csv`
+
+<img src="https://i.imgur.com/m8T8OQW.png" alt="Predictions compared with past year" width="600"/>
+>>>>>>> origin/main
 
 The main run writes forecasts under `predictions/`, including:
 
@@ -49,7 +60,53 @@ The main run writes forecasts under `predictions/`, including:
 
 A cumulative forecast ledger is written to `predictions/forecast_performance.csv`.
 
+<<<<<<< HEAD
 ## Configuration
+=======
+---
+
+## Ablation Pipeline
+
+The repository now includes a dedicated ablation framework in `model/ablation/` with:
+
+- One class per model in its own Python file:
+  - `model/ablation/models/random_forest_model.py`
+  - `model/ablation/models/gradient_boosting_model.py`
+  - `model/ablation/models/elastic_net_model.py`
+- Corresponding serialized model weight files as `.pkl` artifacts in:
+  - `model/ablation/models/weights/`
+- Reproducibility controls:
+  - Global random seed set for `random`, `numpy`, and TensorFlow (if available)
+- Experiment tracking in a single CSV log:
+  - `model/ablation/ablation_experiment_log.csv`
+
+Each logged experiment row includes:
+
+- Ablation dimensions:
+  - `model_type`
+  - `training_cutoff_date`
+  - `autoregressive`
+  - `target_type` (`raw`, `first_differenced`, `deseasonalised`, `seasonally_differenced`, `differenced_anomaly`)
+  - `inundation_product` (`viirs` or `modis`)
+  - `seed`
+- Dataset properties:
+  - source path, row counts, feature count
+  - date range
+  - target mean/std
+  - dataset fingerprint hash
+- Performance metrics:
+  - `calibration`
+  - `twcrps`
+  - `mae`
+  - `rmse`
+  - `quantile_loss_95`
+  - `quantile_loss_99`
+  - `peak_precision`
+  - `peak_recall`
+  - `peak_auc`
+  - `peak_f1`
+
+>>>>>>> origin/main
 
 The main settings are in [config.yaml](config.yaml).
 

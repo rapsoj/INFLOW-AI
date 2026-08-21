@@ -962,10 +962,17 @@ def run_full_spatial_analysis():
     transform, crs, regions_gdf, _ = load_spatial_ref()
 
     # Load transformation reference
+<<<<<<< HEAD
     inundation_path = inundation_files[-1]
     catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp"
     download_path = inundation_download_path
     inundation_file = os.path.basename(inundation_path)
+=======
+    inundation_path="data/downloads/inundation_masks_modis/20250211.tif"
+    catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp"
+    download_path='data/downloads/inundation_masks_modis'
+    inundation_file="20250211.tif"
+>>>>>>> origin/main
 
     # Process the new TIF files
     with rasterio.open(inundation_path) as src:

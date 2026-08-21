@@ -20,17 +20,31 @@ import h5py
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+<<<<<<< HEAD
 GR_RAINFALL_TEMPORAL_PATH = cleaning_utils.get_target_historic_path("gridded_rainfall_temporal.csv")
 GR_RAINFALL_H5_PATH = cleaning_utils.get_target_historic_path("gridded_rainfall.h5")
 GR_RAINFALL_CUM_TEMPORAL_PATH = cleaning_utils.get_target_historic_path("gridded_rainfall_cumulative_temporal.csv")
 GR_RAINFALL_CUM_H5_PATH = cleaning_utils.get_target_historic_path("gridded_rainfall_cumulative.h5")
+=======
+GR_RAINFALL_TEMPORAL_PATH = get_cfg("paths.historic.gridded_rainfall_temporal", "data/historic/gridded_rainfall_temporal.csv")
+GR_RAINFALL_H5_PATH = get_cfg("paths.historic.gridded_rainfall_h5", "data/historic/gridded_rainfall.h5")
+GR_RAINFALL_CUM_TEMPORAL_PATH = get_cfg("paths.historic.gridded_rainfall_cumulative_temporal", "data/historic/gridded_rainfall_cumulative_temporal.csv")
+GR_RAINFALL_CUM_H5_PATH = get_cfg("paths.historic.gridded_rainfall_cumulative_h5", "data/historic/gridded_rainfall_cumulative.h5")
+>>>>>>> origin/main
 
 
 def read_stats(region='all'):
     """
     Retained for compatibility with callers from older pipeline versions.
     """
+<<<<<<< HEAD
     return 0.0, 1.0
+=======
+    rainfall_cumulative_mean = gridded_stats.gridded_rainfall_cumulative_stats[region]['mean']
+    rainfall_cumulative_std = gridded_stats.gridded_rainfall_cumulative_stats[region]['std']
+    
+    return rainfall_cumulative_mean, rainfall_cumulative_std
+>>>>>>> origin/main
 
 
 def standardize_array(array, mean, std):
@@ -198,10 +212,16 @@ def update_gridded_rainfall_cumulative(
 
     try:
         # Crop historic data if historic spatial and temporal data are not the same size   
+<<<<<<< HEAD
         if os.path.exists(GR_RAINFALL_CUM_H5_PATH) and os.path.exists(temporal_data_path):
             crop_historic_data(
                 file_path=GR_RAINFALL_CUM_H5_PATH,
                 temporal_data_path=temporal_data_path,
+=======
+        crop_historic_data(
+            file_path=GR_RAINFALL_CUM_H5_PATH,
+            temporal_data_path=temporal_data_path,
+>>>>>>> origin/main
             )
             
         # Load new gridded rainfall data

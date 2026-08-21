@@ -29,8 +29,13 @@ DOWNLOADS_ROOT = get_cfg("paths.downloads.root", "data/downloads")
 GR_MOISTURE_DOWNLOAD_PATH = get_cfg("paths.downloads.tamsat_sm_daily", "data/downloads/tamsat/soil_moisture/data/v2.3.1/daily")
 EXTRACTED_DOMAIN_PATH = get_cfg("paths.downloads.extracted_domain", "data/downloads/extracted_data/domain")
 GR_MOISTURE_DEKADS_PATH = get_cfg("paths.downloads.tamsat_sm_dekads", "data/downloads/tamsat/soil_moisture/dekads")
+<<<<<<< HEAD
 GR_MOISTURE_TEMPORAL_PATH = cleaning_utils.get_target_historic_path("gridded_moisture_temporal.csv")
 GR_MOISTURE_H5_PATH = cleaning_utils.get_target_historic_path("gridded_moisture.h5")
+=======
+GR_MOISTURE_TEMPORAL_PATH = get_cfg("paths.historic.gridded_moisture_temporal", "data/historic/gridded_moisture_temporal.csv")
+GR_MOISTURE_H5_PATH = get_cfg("paths.historic.gridded_moisture_h5", "data/historic/gridded_moisture.h5")
+>>>>>>> origin/main
 CATCHMENTS_PATH = get_cfg("paths.maps.catchments", "data/maps/inflow_catchments/INFLOW_all_cmts.shp")
 TAMSAT_SM_VERSION = str(get_cfg("runtime.tamsat.sm_version", "2.3.1"))
 
@@ -117,6 +122,7 @@ def _validate_moisture_netcdf_file(netcdf_path):
 		raise RuntimeError(f"Invalid moisture NetCDF file '{netcdf_path}': {e}") from e
 
 
+<<<<<<< HEAD
 def _moisture_netcdf_date_range(netcdf_path):
 	with nc.Dataset(netcdf_path, mode="r") as ds:
 		time_var = ds.variables["time"]
@@ -240,6 +246,104 @@ def export_decadal_geotiffs(extract_folder, output_folder, target_product="modis
 		times = moisture_grid.variables["time"][:]
 		moisture_var = moisture_grid.variables["sm_c4grass"]
 
+=======
+def _get_latest_valid_moisture_netcdf(extract_folder):
+	"""Return most recent readable moisture NetCDF from extract folder."""
+	list_of_files = sorted(
+		glob.glob(os.path.join(os.getcwd(), extract_folder, "*.nc")),
+		key=os.path.getctime,
+		reverse=True,
+	)
+	if not list_of_files:
+		raise RuntimeError(f"No extracted NetCDF files found in '{extract_folder}'.")
+
+	errors = []
+	for path in list_of_files:
+		try:
+			_validate_moisture_netcdf_file(path)
+			return path
+		except Exception as e:
+			errors.append(f"{os.path.basename(path)}: {e}")
+
+	raise RuntimeError(
+		"No valid extracted moisture NetCDF file found. Validation errors: " + " | ".join(errors)
+	)
+
+
+def get_historic_dates(data_path=GR_MOISTURE_TEMPORAL_PATH):
+	"""Get list of historic dates from temporal moisture data."""
+	try:
+		gridded_moisture_temporal = pd.read_csv(data_path)
+		if "date" in gridded_moisture_temporal.columns:
+			historic_dates = gridded_moisture_temporal["date"].astype(str).tolist()
+		else:
+			historic_dates = gridded_moisture_temporal.index.astype(str).tolist()
+		return historic_dates
+	except FileNotFoundError:
+		logging.error(f"File not found: {data_path}")
+		return []
+
+
+def download_new_gridded_moisture(download_folder, target_product=None):
+	"""Download gridded moisture for dates not already downloaded."""
+	target_product = cleaning_utils.resolve_target_product(target_product)
+	download_path_full = os.path.join(os.getcwd(), download_folder)
+	current_date_str = datetime.now().strftime("%Y-%m-%d")
+	historic_dates = get_historic_dates()
+	has_historic_temporal = bool(historic_dates)
+
+	if has_historic_temporal:
+		last_date = datetime.strptime(historic_dates[-1], "%Y-%m-%d").strftime("%Y-%m-%d")
+	else:
+		last_date = cleaning_utils.get_target_start_date(target_product=target_product)
+
+	new_dates = cleaning_utils.get_dates_of_interest(
+		start_date_str=last_date,
+		end_date_str=current_date_str,
+		target_product=target_product,
+	)
+
+	if has_historic_temporal:
+		local_dates = cleaning_utils.get_local_download_dates(download_path_full)
+		missing_dates = [d for d in new_dates if d not in local_dates]
+	else:
+		missing_dates = new_dates
+
+	if missing_dates:
+		download_range = [missing_dates[0], missing_dates[-1]]
+		download_gridded_moisture(download_range, download_path_full)
+		extract_gridded_moisture(download_range, download_folder)
+		_get_latest_valid_moisture_netcdf(EXTRACTED_DOMAIN_PATH)
+	else:
+		logging.info("No new dates to download.")
+
+
+def group_dates_by_target_period(dates, target_product="modis"):
+	"""Group dates into target-product windows."""
+	return cleaning_utils.group_dates_by_target_period(dates, target_product=target_product)
+
+
+def export_decadal_geotiffs(extract_folder, output_folder, target_product="modis"):
+	"""Export moisture grouped by target period into GeoTIFF files."""
+	os.makedirs(output_folder, exist_ok=True)
+
+	files = glob.glob(os.path.join(output_folder, "*"))
+	for file in files:
+		try:
+			os.remove(file)
+		except Exception as e:
+			print(f"Error deleting {file}: {e}")
+
+	latest_file = _get_latest_valid_moisture_netcdf(extract_folder)
+
+	# Stream from NetCDF in small slices so the full time cube is never loaded.
+	with nc.Dataset(latest_file, mode="r") as moisture_grid:
+		lats = moisture_grid.variables["lat"][:]
+		lons = moisture_grid.variables["lon"][:]
+		times = moisture_grid.variables["time"][:]
+		moisture_var = moisture_grid.variables["sm_c4grass"]
+
+>>>>>>> origin/main
 		first_date = datetime.strptime(latest_file[-24:-14], "%Y-%m-%d")
 		dates = [(first_date + timedelta(days=int(i))) for i in times]
 
@@ -249,9 +353,15 @@ def export_decadal_geotiffs(extract_folder, output_folder, target_product="modis
 
 		lon_min = lons.min()
 		lat_max = lats.max()
+<<<<<<< HEAD
 		pixel_size_x = abs(lons[1] - lons[0])
 		pixel_size_y = abs(lats[1] - lats[0])
 		transform = from_origin(lon_min, lat_max, pixel_size_x, pixel_size_y)
+=======
+		pixel_size_x = lons[1] - lons[0]
+		pixel_size_y = lats[1] - lats[0]
+		transform = from_origin(lon_min, lat_max, pixel_size_x, -pixel_size_y)
+>>>>>>> origin/main
 
 		for group, indices in tqdm(
 			zip(date_groups, grouped_indices),
@@ -270,8 +380,11 @@ def export_decadal_geotiffs(extract_folder, output_folder, target_product="modis
 				sum_2d += arr_2d
 
 			decadal_avg = sum_2d / float(len(indices))
+<<<<<<< HEAD
 			if lats[0] < lats[-1]:
 				decadal_avg = np.flipud(decadal_avg)
+=======
+>>>>>>> origin/main
 
 			first_dekad_str = group[0].strftime("%Y%m%d")
 			output_file = os.path.join(output_folder, f"moisture_decadal_{first_dekad_str}.tif")
@@ -289,8 +402,12 @@ def export_decadal_geotiffs(extract_folder, output_folder, target_product="modis
 			) as dst:
 				dst.write(decadal_avg, 1)
 
+<<<<<<< HEAD
 			period_label = "VIIRS half-month" if target_product == "viirs" else "MODIS dekad"
 			print(f"Exported {period_label} GeoTIFF for {first_dekad_str}")
+=======
+			print(f"Exported decadal GeoTIFF for {first_dekad_str}")
+>>>>>>> origin/main
 
 
 def crop_historic_data(file_path, temporal_data_path):
@@ -379,6 +496,7 @@ def update_gridded_moisture(
 	"""Combine newly downloaded gridded moisture with existing data."""
 	try:
 		target_product = cleaning_utils.resolve_target_product(None)
+<<<<<<< HEAD
 		local_dates = cleaning_utils.get_local_download_dates(os.path.join(os.getcwd(), download_path))
 		needs_rebuild = False
 		if os.path.exists(GR_MOISTURE_H5_PATH) and os.path.exists(temporal_data_path):
@@ -412,6 +530,15 @@ def update_gridded_moisture(
 				temporal_data_path=temporal_data_path,
 			)
 
+=======
+
+		if os.path.exists(GR_MOISTURE_H5_PATH) and os.path.exists(temporal_data_path):
+			crop_historic_data(
+				file_path=GR_MOISTURE_H5_PATH,
+				temporal_data_path=temporal_data_path,
+			)
+
+>>>>>>> origin/main
 		download_new_gridded_moisture(download_folder, target_product=target_product)
 
 		dekads_path_full = os.path.join(os.getcwd(), dekads_path)

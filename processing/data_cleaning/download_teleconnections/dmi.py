@@ -11,10 +11,14 @@ import typer
 import pandas as pd
 import numpy as np
 
-SOURCE_URL = "https://www.cpc.ncep.noaa.gov/products/international/ocean_monitoring/indian/IODMI/mnth.ersstv5.clim19912020.dmi_current.txt"
-FILE_PATH_PARTS = ("data/downloads/teleconnections", "dmi.txt")
-DATA_ROOT = Path(os.getcwd()) # Modify as needed
-FOLDER_PATH = os.path.join(DATA_ROOT, 'data/downloads/teleconnections') # Modify as needed
+from ...config import get_cfg
+
+SOURCE_URL = get_cfg(
+    "sources.teleconnections.dmi",
+    "https://www.cpc.ncep.noaa.gov/products/international/ocean_monitoring/indian/IODMI/mnth.ersstv5.clim19912020.dmi_current.txt",
+)
+FOLDER_PATH = Path(get_cfg("paths.downloads.teleconnections", "data/downloads/teleconnections"))
+DMI_FILE_PATH = FOLDER_PATH / "dmi.txt"
 
 def download_dmi(
     skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = False,
@@ -22,7 +26,7 @@ def download_dmi(
     """Download Oceanic Nino Index data."""
     logger.info("Downloading DMI data...")
     response = requests.get(SOURCE_URL)
-    out_file = DATA_ROOT.joinpath(*FILE_PATH_PARTS)
+    out_file = DMI_FILE_PATH
     logger.info(f"Output file path is {out_file}")
     if skip_existing and out_file.exists():
         logger.info("File exists. Skipping.")
@@ -36,8 +40,7 @@ def download_dmi(
 
 def import_dmi():
     # Import dmi dataset
-    file_path = os.path.join(FOLDER_PATH, "dmi.txt")
-    df_dmi = pd.read_table(file_path, delim_whitespace=True, skiprows=8)
+    df_dmi = pd.read_table(DMI_FILE_PATH, sep=r"\s+", skiprows=8)
     return df_dmi
 
 

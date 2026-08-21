@@ -8,17 +8,19 @@ import numpy as np
 # Import client libraries
 import requests
 
-# Import machine learning libraries
-from sklearn.preprocessing import StandardScaler
-
 # Import cleaning utils
 from .. import cleaning_utils
+from ..config import get_cfg
 
 # Define constants
-URL = "https://gws-access.jasmin.ac.uk/public/tamsat/INFLOW/rainfall/rfe_time-series/combined/rfe_19830101-present_Lake-Victoria.csv"
-FOLDER_PATH = "data/downloads/tamsat"
-FILE_NAME = "rainfall.csv"
+URL = get_cfg(
+    "sources.rainfall_url",
+    "https://gws-access.jasmin.ac.uk/public/tamsat/INFLOW/rainfall/rfe_time-series/combined/rfe_19830101-present_Lake-Victoria.csv",
+)
+FOLDER_PATH = get_cfg("paths.downloads.tamsat", "data/downloads/tamsat")
+FILE_NAME = get_cfg("paths.downloads.rainfall_file_name", "rainfall.csv")
 FILE_PATH = os.path.join(FOLDER_PATH, FILE_NAME)
+RAINFALL_OUTPUT_PATH = get_cfg("paths.historic.rainfall", "data/historic/rainfall.csv")
 
 
 def download_rainfall_data(url=URL, folder_path=FOLDER_PATH, file_path=FILE_PATH):
@@ -147,32 +149,6 @@ def calculate_cumulative_values(rainfall, columns):
     except Exception as e:
         print(f"Error in calculating cumulative values: {e}")
         return rainfall
-
-
-def scale_data(rainfall):
-    """
-    Scale the rainfall dataset using StandardScaler based on the first 804 rows.
-
-    Parameters:
-        rainfall (pd.DataFrame): The rainfall dataset.
-
-    Returns:
-        pd.DataFrame: The scaled rainfall dataset.
-    """
-    try:
-        # Initialize the StandardScaler
-        scaler = StandardScaler()
-
-        # Fit the scaler on the first 804 rows
-        scaler.fit(rainfall.iloc[:804])
-
-        # Transform the entire dataset using the fitted scaler
-        df_scaled = scaler.transform(rainfall)
-
-        return pd.DataFrame(df_scaled, index=rainfall.index, columns=rainfall.columns)
-    except Exception as e:
-        print(f"Error in scaling data: {e}")
-        return rainfall
         
         
 def interpolate_missing(rainfall):
@@ -216,7 +192,7 @@ def interpolate_missing(rainfall):
     return rainfall
 
 
-def update_rainfall():
+def update_rainfall(target_product=None):
     """
     Main function to download, process, and prepare the rainfall data for deployment.
 
@@ -227,12 +203,14 @@ def update_rainfall():
         pd.DataFrame: The processed and prepared rainfall dataset.
     """
     try:
+        target_product = cleaning_utils.resolve_target_product(target_product)
+
         # Download and load data
         download_rainfall_data()
         rainfall = load_and_preprocess_rainfall_data()
 
         # Align data with the specified dates
-        dates_list = cleaning_utils.get_dates_of_interest()
+        dates_list = cleaning_utils.get_dates_of_interest(target_product=target_product)
         dates_list = pd.to_datetime(dates_list).sort_values()
         rainfall = align_rainfall_with_dates(rainfall, dates_list)
 
@@ -243,15 +221,14 @@ def update_rainfall():
         # Calculate cumulative values
         rainfall = calculate_cumulative_values(rainfall, ['TAMSAT', 'CHIRPS'])
 
-        # Filter to study period
-        min_date = pd.to_datetime('2002-07-01')
+        # Filter to target study period
+        min_date = pd.to_datetime(cleaning_utils.get_target_start_date(target_product=target_product))
         rainfall = rainfall[rainfall.index >= min_date]
 
-        # Scale the data
-        rainfall = scale_data(rainfall)
-
         # Save the processed data
-        rainfall.to_csv('data/historic/rainfall.csv', index=True)
+        output_path = cleaning_utils.get_target_historic_path("rainfall.csv", target_product)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        rainfall.to_csv(output_path, index=True)
         print("Rainfall data processing completed successfully.")
 
     except Exception as e:

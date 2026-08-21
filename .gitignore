@@ -1,9 +1,10 @@
 data/
 model/testing/
-*.csv
 *.pkl
 *.h5
+*.npy
 *.pt
+*.tif
 *.ckpt
 *.ipynb
 __pycache__/

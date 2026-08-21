@@ -1,0 +1,416 @@
+# Import system libraries
+import os
+
+# Import data manipulation libraries
+import numpy as np
+import pandas as pd
+from datetime import datetime
+
+# Import geospatial libraries
+import geopandas as gpd
+import rasterio
+
+# Import client libraries
+import requests
+
+# Import compression libraries
+import h5py
+
+# Import progress bar libraries
+from tqdm import tqdm
+
+# Import cleaning utils
+from .. import cleaning_utils
+from ..config import get_cfg
+
+# Import statistics
+from data.stats import gridded_stats
+
+# Configure logging
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+MODIS_BASE_URL = get_cfg(
+    "sources.modis_base_url",
+    "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask",
+)
+MODIS_DOWNLOAD_PATH = get_cfg("paths.downloads.inundation_modis", "data/downloads/inundation_masks_modis")
+MODIS_H5_PATH = get_cfg("paths.historic.modis_h5", "data/historic/modis-aligned/inundation_modis.h5")
+MODIS_TEMPORAL_PATH = get_cfg(
+    "paths.historic.inundation_temporal",
+    "data/historic/modis-aligned/inundation_modis_temporal.csv",
+)
+MODIS_DSET_NAME = "inundation"
+STUDY_START_DATE = get_cfg("runtime.study_start_date", "2002-07-01")
+INFLOW_CATCHMENTS_PATH = get_cfg(
+    "paths.maps.catchments",
+    "data/maps/inflow_catchments/INFLOW_all_cmts.shp",
+)
+
+
+def download_inundation(dates_list, download_path=MODIS_DOWNLOAD_PATH):
+    """
+    Download inundation data for the specified dates.
+
+    Parameters:
+        dates_list (list): List of dates for which to download inundation data.
+        download_path (str): Directory path to save downloaded TIF files.
+    """
+    base_url = MODIS_BASE_URL
+    if not os.path.exists(download_path):
+        os.makedirs(download_path)
+
+    for date in tqdm(dates_list, desc="Downloading inundation data"):
+        if isinstance(date, str):
+            date = datetime.strptime(date, '%Y-%m-%d')
+        formatted_date = date.strftime('%Y%m%d')
+        file_name = f"{formatted_date}.tif"
+        file_url = f"{base_url}{file_name}"
+        file_path = os.path.join(download_path, file_name)
+
+        try:
+            response = requests.get(file_url, stream=True)
+            if response.status_code == 200:
+                with open(file_path, 'wb') as f:
+                    f.write(response.content)
+        except Exception as e:
+            print(f"Error occurred while downloading {file_name}: {e}")
+
+
+def get_sorted_tif_files(folder_path):
+    """
+    Get a sorted list of TIF files in a specified folder.
+
+    Parameters:
+        folder_path (str): Path to the folder containing TIF files.
+
+    Returns:
+        list: Sorted list of TIF file names.
+    """
+    try:
+        tif_files = [f for f in os.listdir(folder_path) if f.endswith(".tif")]
+        tif_files.sort()
+        return tif_files
+    except FileNotFoundError:
+        logging.error(f"Folder not found: {folder_path}")
+        return []
+
+
+def load_shapefile(path):
+    """
+    Load a shapefile as a GeoDataFrame.
+
+    Parameters:
+        path (str): Path to the shapefile.
+
+    Returns:
+        GeoDataFrame: Loaded shapefile as a GeoDataFrame.
+    """
+    try:
+        return gpd.read_file(path)
+    except FileNotFoundError:
+        logging.error(f"Shapefile not found: {path}")
+        return None
+
+
+def reproject_to_raster_crs(shapefile, raster_path):
+    """
+    Reproject a GeoDataFrame to match the CRS of a raster file.
+
+    Parameters:
+        shapefile (GeoDataFrame): The GeoDataFrame to reproject.
+        raster_path (str): Path to a raster file for CRS reference.
+
+    Returns:
+        GeoDataFrame: Reprojected GeoDataFrame.
+    """
+    try:
+        with rasterio.open(raster_path) as src:
+            return shapefile.to_crs(src.crs)
+    except Exception as e:
+        logging.error(f"Error in reprojecting shapefile: {e}")
+        return None
+
+
+def process_and_clip_rasters(tif_files, folder_path, catchments):
+    """
+    Align, mask, and collect metadata for each raster file in a folder.
+
+    Parameters:
+        tif_files (list): List of TIF file names.
+        folder_path (str): Path to the folder containing TIF files.
+        catchments (GeoDataFrame): GeoDataFrame of the catchment areas for clipping.
+
+    Returns:
+        tuple: Arrays of aligned rasters, list of file names, and metadata dictionary.
+    """
+    clipped_tif_files = []
+    tif_file_names = []
+    spatial_metadata = {}
+
+    for file_name in tqdm(tif_files, desc="Processing TIF files"):
+        file_path = os.path.join(folder_path, file_name)
+
+        try:
+            with rasterio.open(file_path) as src:
+                aligned_masked = cleaning_utils.align_and_mask_raster_to_reference_grid(
+                    src=src,
+                    mask_gdf=catchments,
+                    src_band=1,
+                    dst_fill=0,
+                )
+
+                clipped_tif_files.append(aligned_masked)
+                tif_file_names.append(file_name)
+                spatial_metadata[file_name] = {
+                    "crs": cleaning_utils.MASK_REGIONS_REF_CRS,
+                    "transform": cleaning_utils.MASK_REGIONS_REF_TRANSFORM,
+                    "height": cleaning_utils.MASK_REGIONS_REF_SHAPE[0],
+                    "width": cleaning_utils.MASK_REGIONS_REF_SHAPE[1],
+                    "bounds": cleaning_utils.MASK_REGIONS_REF_BOUNDS,
+                }
+        except Exception as e:
+            logging.error(f"Error processing file {file_name}: {e}")
+            continue
+
+    return clipped_tif_files, tif_file_names, spatial_metadata
+
+
+def get_historic_dates(data_path=MODIS_TEMPORAL_PATH):
+    """
+    Get list of historic dates from pre-downloaded data.
+
+    Parameters:
+        data_path (str): Directory path of pre-downloaded temporal data.
+    """
+    try:
+        inundation_temporal = pd.read_csv(data_path)
+        if "date" in inundation_temporal.columns:
+            historic_dates = inundation_temporal["date"].astype(str).tolist()
+        else:
+            historic_dates = inundation_temporal.index.astype(str).tolist()
+        return historic_dates
+    except FileNotFoundError:
+        logging.error(f"File not found: {data_path}")
+        return []
+
+
+def download_new_inundation(download_path=MODIS_DOWNLOAD_PATH, burn_in_steps=18):
+    """
+    Download inundation data for the last `burn_in_steps` timesteps (to refresh them)
+    plus any new dates up to the current date.
+
+    Parameters:
+        download_path (str): Directory path to save downloaded TIF files.
+        burn_in_steps (int): Number of timesteps to always refresh.
+    """
+    current_date_str = datetime.now().strftime("%Y-%m-%d")
+    historic_dates = get_historic_dates()
+
+    if historic_dates:
+        # Always include the last N dates to refresh
+        if len(historic_dates) >= burn_in_steps:
+            start_date = historic_dates[-burn_in_steps]
+        else:
+            start_date = historic_dates[0]
+    else:
+        # Default if no history exists
+        start_date = STUDY_START_DATE
+
+    # Get all dates of interest (last N + up to today)
+    new_dates = cleaning_utils.get_dates_of_interest(
+        start_date_str=start_date,
+        end_date_str=current_date_str
+    )
+
+    if new_dates:
+        logging.info(f"Downloading {len(new_dates)} dates (including last {burn_in_steps} for refresh).")
+        download_inundation(new_dates, download_path)
+    else:
+        logging.info("No new dates to download.")
+        
+        
+def crop_historic_data(file_path, temporal_data_path):
+    """
+    Crop or recreate the historic inundation HDF5 dataset to match the temporal CSV length.
+    """
+
+    hist = pd.read_csv(temporal_data_path)
+    new_len = len(hist)
+
+    # --- Open HDF5 and check dataset length ---
+    with h5py.File(file_path, "r+") as f:
+        dset_name = list(f.keys())[0]
+        dset = f[dset_name]
+        current_len = dset.shape[0]
+
+        # --- If HDF5 shorter, crop CSV to match ---
+        if current_len < new_len:
+            hist.iloc[:current_len].to_csv(temporal_data_path, index=False)
+            print(f"Cropped CSV to {current_len} timesteps.")
+
+        # --- If HDF5 longer, recreate file (truncate + rewrite) ---
+        elif current_len > new_len:
+            print(f"Cropping HDF5 from {current_len} → {new_len} timesteps...")
+
+            # Read cropped data before removing file
+            data = dset[:new_len]
+            dtype, shape = dset.dtype, data.shape
+            f.close()  # close handle before removing
+
+            # Remove and recreate (truncate)
+            os.remove(file_path)
+            with h5py.File(file_path, "w") as newf:
+                newf.create_dataset(
+                    dset_name,
+                    data=data,
+                    maxshape=(None, *shape[1:]),
+                    chunks=True,
+                    dtype=dtype,
+                )
+            print("✅ HDF5 file truncated and recreated with cropped data.")
+
+        else:
+            print("✅ No cropping needed. Temporal lengths already match.")
+        
+        
+def remove_burn_in_data(h5_file_path=MODIS_H5_PATH,
+                        temporal_data_path=MODIS_TEMPORAL_PATH,
+                        dset_name=MODIS_DSET_NAME,
+                        burn_in_steps=18):
+    """
+    Remove the last `burn_in_steps` dekads from saved MODIS data
+    (spatio-temporal HDF5 dataset and temporal CSV).
+    
+    Parameters:
+        h5_file_path (str): Path to spatio-temporal historic MODIS HDF5 file.
+        temporal_data_path (str): Path to temporal CSV file.
+        dset_name (str): Name of dataset inside the HDF5 file.
+        burn_in_steps (int): Number of timesteps (along axis 0) to drop from the end.
+    """
+    import pandas as pd
+    import h5py
+
+    # --- Process HDF5 file ---
+    with h5py.File(h5_file_path, "r") as f:
+        if dset_name not in f:
+            raise KeyError(f"Dataset '{dset_name}' not found in {h5_file_path}.")
+        data = f[dset_name][:]
+
+    # Crop last axis (remove last `burn_in_steps` entries)
+    if data.shape[0] <= burn_in_steps:
+        raise ValueError("Not enough timesteps to remove burn-in data.")
+    data_cropped = data[:-burn_in_steps]
+
+    # Overwrite file with cropped dataset
+    with h5py.File(h5_file_path, "w") as f:
+        dset = f.create_dataset(
+            dset_name,
+            shape=data_cropped.shape,
+            maxshape=(None, *data_cropped.shape[1:]),
+            chunks=True,
+            dtype=data_cropped.dtype,
+        )
+        dset[:] = data_cropped
+
+    df = pd.read_csv(temporal_data_path)
+    if len(df) <= burn_in_steps:
+        raise ValueError(f"Not enough rows in {temporal_data_path} to remove burn-in data.")
+
+    df_cropped = df.iloc[:-burn_in_steps].reset_index(drop=True)
+    if "date" in df_cropped.columns:
+        df_cropped["date"] = pd.to_datetime(df_cropped["date"])
+        df_cropped = df_cropped.sort_values("date").reset_index(drop=True)
+    df_cropped.to_csv(temporal_data_path, index=False)
+
+    print(f"Removed last {burn_in_steps} timesteps from HDF5 and temporal CSV.")
+        
+
+def update_inundation(download_path=MODIS_DOWNLOAD_PATH,
+                      temporal_data_path=MODIS_TEMPORAL_PATH):
+    """
+    Process newly downloaded inundation data and combine it with existing data.
+
+    Parameters:
+        download_path (str): Directory path to save downloaded TIF files.
+        temporal_data_path (str): Directory path of pre-downloaded temporal data.
+        temporal_data_path (str): Directory path of pre-downloaded temporal data.
+    """
+    try:
+        with h5py.File(MODIS_H5_PATH, 'r') as f:
+            inundation_historic = f[MODIS_DSET_NAME]
+            logging.info(f"Existing inundation data shape: {inundation_historic.shape}")
+            
+        # Crop historic data if historic spatial and temporal data are not the same size   
+        crop_historic_data(
+            file_path=MODIS_H5_PATH,
+            temporal_data_path=temporal_data_path
+        )
+            
+        # Remove burn-in data
+        remove_burn_in_data()
+
+        # Update inundation data by downloading new files
+        download_new_inundation(download_path)
+
+        # Get the sorted TIF files after the update
+        sorted_files = get_sorted_tif_files(download_path)
+        historic_dates = get_historic_dates()
+
+        # Identify new files to process (files not already processed)
+        file_dates = [datetime.strptime(f.split('.')[0], "%Y%m%d").strftime("%Y-%m-%d") for f in sorted_files]
+        new_dates_indices = [i for i, date in enumerate(file_dates) if date not in historic_dates]
+        new_files = [sorted_files[i] for i in new_dates_indices]
+
+        if not new_files:
+            logging.info("No new files to process.")
+            return
+
+        # Process the new TIF files
+        catchments = load_shapefile(INFLOW_CATCHMENTS_PATH)
+
+        # Process rasters and gather new data
+        new_clipped_tif_files, _, _ = process_and_clip_rasters(new_files, download_path, catchments)
+        
+        # Crop area to regions of interest
+        regions_gdf = cleaning_utils.extract_regions()
+        
+        # Calculate total number of cells
+        total_cells = new_clipped_tif_files[0].shape[0] * new_clipped_tif_files[0].shape[1]
+        
+        # Create new temporal data
+        inundation_temporal = pd.DataFrame(np.sum(new_clipped_tif_files, axis=(1, 2)) / total_cells, columns=["percent_inundation"])
+        
+        # Fix index creation by looping over new_files
+        inundation_temporal['date'] = [datetime.strptime(file.split('.')[0], "%Y%m%d").date() for file in new_files]
+        
+        # Loop through regions
+        for i in range(len(regions_gdf)):
+            region_data = regions_gdf.iloc[[i]]
+            region_code = gridded_stats.region_to_code_dict[region_data['region'].values[0]]
+            region_area = cleaning_utils.mask_regions(region_data, np.array(new_clipped_tif_files))
+            inundation_temporal[f"percent_inundation_{region_code}"] = np.nansum(region_area, axis=(1, 2)) / (total_cells - np.sum(np.isnan(region_area[0])))
+
+        # Combine existing and new inundation data
+        with h5py.File(MODIS_H5_PATH, 'a') as hdf:
+            dset = hdf[MODIS_DSET_NAME]
+            old_dataset_length = dset.shape[0]
+            dset.resize(dset.shape[0] + len(new_clipped_tif_files), axis=0)
+            dset[-len(new_clipped_tif_files):] = new_clipped_tif_files
+            logging.info(f"Updated inundation data shape: {dset.shape}")
+            
+        # Update temporal data
+        if old_dataset_length > 0 and os.path.exists(temporal_data_path):
+            inundation_temporal_historic = pd.read_csv(temporal_data_path)[:old_dataset_length]
+        else:
+            inundation_temporal_historic = pd.DataFrame(columns=inundation_temporal.columns)
+        inundation_temporal_new = pd.concat([inundation_temporal_historic, inundation_temporal], ignore_index=True)
+        
+        # Save the updated temporal data
+        inundation_temporal_new['date'] = pd.to_datetime(inundation_temporal_new['date'], format='%Y-%m-%d')
+        inundation_temporal_new.sort_values("date").to_csv(MODIS_TEMPORAL_PATH, index=False)
+            
+    except Exception as e:
+        logging.error(f"Error processing new inundation data: {e}")
+
+    logging.info("Inundation processing complete.\n")

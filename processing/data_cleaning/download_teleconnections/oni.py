@@ -10,10 +10,11 @@ import typer
 
 import pandas as pd
 
-SOURCE_URL = "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
-FILE_PATH_PARTS = ("data/downloads/teleconnections", "oni.txt")
-DATA_ROOT = Path(os.getcwd()) # Modify as needed
-FOLDER_PATH = os.path.join(DATA_ROOT, 'data/downloads/teleconnections') # Modify as needed
+from ...config import get_cfg
+
+SOURCE_URL = get_cfg("sources.teleconnections.oni", "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt")
+FOLDER_PATH = Path(get_cfg("paths.downloads.teleconnections", "data/downloads/teleconnections"))
+ONI_FILE_PATH = FOLDER_PATH / "oni.txt"
 
 def download_oni(
     skip_existing: Annotated[bool, typer.Option(help="Whether to skip an existing file.")] = False,
@@ -21,7 +22,7 @@ def download_oni(
     """Download Oceanic Nino Index data."""
     logger.info("Downloading ONI data...")
     response = requests.get(SOURCE_URL)
-    out_file = DATA_ROOT.joinpath(*FILE_PATH_PARTS)
+    out_file = ONI_FILE_PATH
     logger.info(f"Output file path is {out_file}")
     if skip_existing and out_file.exists():
         logger.info("File exists. Skipping.")
@@ -35,7 +36,7 @@ def download_oni(
 
 def import_oni():
     # Import oni dataset
-    df_oni = pd.read_table(os.path.join(FOLDER_PATH, "oni.txt"), delim_whitespace=True)
+    df_oni = pd.read_table(ONI_FILE_PATH, sep=r"\s+")
     return df_oni
 
 

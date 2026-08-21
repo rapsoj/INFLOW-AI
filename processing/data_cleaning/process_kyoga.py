@@ -9,16 +9,15 @@ from datetime import datetime
 # Import client libraries
 import requests
 
-# Import machine learning libraries
-from sklearn.preprocessing import StandardScaler
-
 # Import cleaning utils
 from .. import cleaning_utils
+from ..config import get_cfg
 
 # Define constants for file URL and paths
-URL = 'https://blueice.gsfc.nasa.gov/gwm/timeseries/lake000398.10d.2.txt'
-FOLDER_PATH = 'data/downloads/lake_levels'
+URL = get_cfg("sources.lake_levels.kyoga_url", "https://blueice.gsfc.nasa.gov/gwm/timeseries/lake000398.10d.2.txt")
+FOLDER_PATH = get_cfg("paths.downloads.lake_levels", "data/downloads/lake_levels")
 FILE_PATH = os.path.join(FOLDER_PATH, 'Kyoga.txt')
+KYOGA_OUTPUT_PATH = get_cfg("paths.historic.kyoga", "data/historic/kyoga.csv")
 
 def download_data(url=URL, folder_path=FOLDER_PATH, file_path=FILE_PATH):
     """
@@ -109,31 +108,6 @@ def align_with_dates(kyoga, dates_list):
         print(f"Error in aligning data with dates: {e}")
         return kyoga
 
-def scale_data(kyoga):
-    """
-    Scale the Kyoga dataset using StandardScaler based on the first 804 rows.
-
-    Parameters:
-        kyoga (pd.DataFrame): The Kyoga dataset.
-
-    Returns:
-        pd.DataFrame: The scaled Kyoga dataset.
-    """
-    try:
-        # Initialize the StandardScaler
-        scaler = StandardScaler()
-
-        # Fit the scaler on the first 804 rows
-        scaler.fit(kyoga.iloc[:804])
-
-        # Transform the entire dataset using the fitted scaler
-        df_scaled = scaler.transform(kyoga)
-
-        return pd.DataFrame(df_scaled, index=kyoga.index, columns=kyoga.columns)
-    except Exception as e:
-        print(f"Error in scaling data: {e}")
-        return kyoga
-        
 
 def interpolate_missing(kyoga):
     """
@@ -169,7 +143,7 @@ def interpolate_missing(kyoga):
     return kyoga
 
 
-def update_kyoga():
+def update_kyoga(target_product=None):
     """
     Main function to download, process, and prepare the Kyoga lake data.
     """
@@ -178,8 +152,10 @@ def update_kyoga():
         download_data()
         kyoga = load_and_preprocess_data()
 
-        # Align data with the specified dates
-        dates_list = cleaning_utils.get_dates_of_interest()
+        target_product = cleaning_utils.resolve_target_product(target_product)
+
+        # Align data with target-aligned dates
+        dates_list = cleaning_utils.get_dates_of_interest(target_product=target_product)
         dates_list = pd.to_datetime(dates_list).sort_values()
         kyoga = align_with_dates(kyoga, dates_list)
 
@@ -187,15 +163,14 @@ def update_kyoga():
         kyoga = interpolate_missing(kyoga)
         kyoga = cleaning_utils.impute_missing_values(kyoga, ['kyoga_height_variation'])
 
-        # Filter to study period
-        min_date = pd.to_datetime('2002-07-01')
+        # Filter to target study period
+        min_date = pd.to_datetime(cleaning_utils.get_target_start_date(target_product=target_product))
         kyoga = kyoga[kyoga.index >= min_date]
 
-        # Scale the data
-        kyoga = scale_data(kyoga)
-
         # Save the processed data
-        kyoga.to_csv('data/historic/kyoga.csv', index=True)
+        output_path = cleaning_utils.get_target_historic_path("kyoga.csv", target_product)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        kyoga.to_csv(output_path, index=True)
         print("Kyoga data processing completed successfully.")
         
     except Exception as e:

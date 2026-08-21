@@ -24,8 +24,9 @@ from pathlib import Path as FilePath
 from matplotlib.path import Path as MplPath
 from matplotlib.lines import Line2D
 import zipfile
-from processing.data_cleaning import process_inundation
+from processing.data_cleaning import process_inundation_modis
 from processing import cleaning_utils
+from processing.config import get_cfg
 
 # Configure logging
 logging.basicConfig(
@@ -245,66 +246,66 @@ def run_inference_pipeline(
     return maps
 
 
-def load_spatial_ref(inundation_path="data/downloads/inundation_masks/20250211.tif",
+def load_spatial_ref(inundation_path="data/downloads/inundation_masks_modis/20250211.tif",
                      catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp",
-                     download_path='data/downloads/inundation_masks',
+                     download_path='data/downloads/inundation_masks_modis',
                      inundation_file="20250211.tif"):
+    # Process the new TIF files
+    with rasterio.open(inundation_path) as src:
+        inundation = src.read(1)  # First band
+        transform = src.transform
+        crs = src.crs
+        width = src.width
+        height = src.height
 
-      # Process the new TIF files
-      with rasterio.open(inundation_path) as src:
-          inundation = src.read(1)  # First band
-          transform = src.transform
-          crs = src.crs
-          width = src.width
-          height = src.height
-      catchments = process_inundation.load_shapefile(catchments_path)
-      catchments = process_inundation.reproject_to_raster_crs(catchments, inundation_path)
+        catchments = process_inundation_modis.load_shapefile(catchments_path)
+        catchments = process_inundation_modis.reproject_to_raster_crs(catchments, inundation_path)
 
-      # Process rasters and gather new data
-      inundation_clipped, _, _ = process_inundation.process_and_clip_rasters([inundation_file], download_path, catchments)
-      inundation = inundation_clipped[0]
+        # Process rasters and gather new data
+        inundation_clipped, _, _ = process_inundation_modis.process_and_clip_rasters([inundation_file], download_path, catchments)
+        inundation = inundation_clipped[0]
 
-      # Crop area to regions of interest
-      regions_gdf = process_inundation.cleaning_utils.extract_regions()
+        # Crop area to regions of interest
+        regions_gdf = process_inundation_modis.cleaning_utils.extract_regions()
 
-      import numpy as np
-      from rasterio.features import rasterize
+        import numpy as np
+        from rasterio.features import rasterize
 
-      # Assign each region a unique integer ID
-      regions_gdf = regions_gdf.copy()
-      regions_gdf['region_id'] = np.arange(1, len(regions_gdf) + 1)
+        # Assign each region a unique integer ID
+        regions_gdf = regions_gdf.copy()
+        regions_gdf['region_id'] = np.arange(1, len(regions_gdf) + 1)
 
-      # Prepare list of (geometry, value) tuples
-      shapes = list(zip(regions_gdf.geometry, regions_gdf['region_id']))
+        # Prepare list of (geometry, value) tuples
+        shapes = list(zip(regions_gdf.geometry, regions_gdf['region_id']))
 
-      # Get transform and shape from raster
-      height, width = inundation.shape
-      regions_gdf = regions_gdf.to_crs(crs)
+        # Get transform and shape from raster
+        height, width = inundation.shape
+        regions_gdf = regions_gdf.to_crs(crs)
 
-      # Reproject regions_gdf to WGS84 (EPSG:4326)
-      regions_gdf = regions_gdf.to_crs(epsg=4326)
+        # Reproject regions_gdf to WGS84 (EPSG:4326)
+        regions_gdf = regions_gdf.to_crs(epsg=4326)
 
-      # Raster reprojection to EPSG:4326
-      from rasterio.warp import calculate_default_transform, reproject, Resampling
+        # Raster reprojection to EPSG:4326
+        from rasterio.warp import calculate_default_transform, reproject, Resampling
 
-      dst_crs = 'EPSG:4326'
-      dst_transform, dst_width, dst_height = calculate_default_transform(
-          crs, dst_crs, width, height, *src.bounds)
+        dst_crs = 'EPSG:4326'
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            crs, dst_crs, width, height, *src.bounds)
 
-      # Create an empty array for reprojected raster
-      reprojected_inundation = np.empty(shape=(height, width), dtype=inundation.dtype)
-      reproject(
-          source=inundation,
-          destination=reprojected_inundation,
-          src_transform=src.transform,  # ✅ the original transform
-          src_crs=crs,
-          dst_transform=dst_transform,  # ✅ the calculated new one
-          dst_crs=dst_crs,
-          resampling=Resampling.nearest
-      )
+        # Create an empty array for reprojected raster
+        reprojected_inundation = np.empty(shape=(height, width), dtype=inundation.dtype)
+        reproject(
+            source=inundation,
+            destination=reprojected_inundation,
+            src_transform=src.transform,
+            src_crs=crs,
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            resampling=Resampling.nearest
+        )
 
-      # Return the new transform, CRS, and reprojected regions_gdf & raster array
-      return dst_transform, dst_crs, regions_gdf, reprojected_inundation
+        # Return the new transform, CRS, and reprojected regions_gdf & raster array
+        return dst_transform, dst_crs, regions_gdf, reprojected_inundation
 
 
 def polygon_to_path_patch(polygon, hatch='///', **kwargs):
@@ -901,8 +902,38 @@ def export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder
 
 
 def run_full_spatial_analysis():
+    target_product = cleaning_utils.resolve_target_product(None)
+    inundation_h5_path = get_cfg(
+        "paths.historic.viirs_h5" if target_product == "viirs" else "paths.historic.inundation_h5",
+        "data/historic/inundation_viirs.h5" if target_product == "viirs" else "data/historic/inundation.h5",
+    )
+    inundation_download_path = get_cfg(
+        "paths.downloads.inundation_viirs" if target_product == "viirs" else "paths.downloads.inundation_modis",
+        f"data/downloads/inundation_masks_{target_product}",
+    )
+
+    if not os.path.exists(inundation_h5_path):
+        logger.warning(
+            "Skipping spatial analysis: target inundation H5 does not exist at %s",
+            inundation_h5_path,
+        )
+        return
+
+    inundation_files = sorted(
+        os.path.join(inundation_download_path, name)
+        for name in os.listdir(inundation_download_path)
+        if name.lower().endswith(".tif")
+    ) if os.path.isdir(inundation_download_path) else []
+    if not inundation_files:
+        logger.warning(
+            "Skipping spatial analysis: no %s inundation rasters found in %s",
+            target_product,
+            inundation_download_path,
+        )
+        return
+
     # Run inference
-    maps = run_inference_pipeline()
+    maps = run_inference_pipeline(inundation_file_path=inundation_h5_path)
 
     # Load prediction CSV
     pred_df, folder_title = load_latest_prediction_csv()
@@ -925,16 +956,16 @@ def run_full_spatial_analysis():
     }
 
     # Load spatial reference and current extent
-    with h5py.File('data/historic/inundation.h5', 'r') as f:
+    with h5py.File(inundation_h5_path, 'r') as f:
         current_extent = f['inundation'][-1]
 
     transform, crs, regions_gdf, _ = load_spatial_ref()
 
     # Load transformation reference
-    inundation_path="data/downloads/inundation_masks/20250211.tif"
+    inundation_path = inundation_files[-1]
     catchments_path="data/maps/inflow_catchments/INFLOW_all_cmts.shp"
-    download_path='data/downloads/inundation_masks'
-    inundation_file="20250211.tif"
+    download_path = inundation_download_path
+    inundation_file = os.path.basename(inundation_path)
 
     # Process the new TIF files
     with rasterio.open(inundation_path) as src:
@@ -943,11 +974,11 @@ def run_full_spatial_analysis():
         crs = src.crs
         width = src.width
         height = src.height
-    catchments = process_inundation.load_shapefile(catchments_path)
-    catchments = process_inundation.reproject_to_raster_crs(catchments, inundation_path)
+    catchments = process_inundation_modis.load_shapefile(catchments_path)
+    catchments = process_inundation_modis.reproject_to_raster_crs(catchments, inundation_path)
 
     # Run the clipping function
-    inundation_clipped, _, metas = process_inundation.process_and_clip_rasters(
+    inundation_clipped, _, metas = process_inundation_modis.process_and_clip_rasters(
         [inundation_file], download_path, catchments)
 
     # Create output directory
@@ -957,7 +988,7 @@ def run_full_spatial_analysis():
     # Plot full country
     title = f"Predicted South Sudan Flood Extent Change from {folder_title[23:33]} to {folder_title[-10:]}\n"
     fig = plot_flood_change_map(masks, current_extent, transform, crs, regions_gdf,
-                                inundation_clipped, metas, inundation_file='20250211.tif', title=title)
+                                inundation_clipped, metas, inundation_file=inundation_file, title=title)
     fig.savefig(output_dir / f"south_sudan_spatial_prediction_{folder_title[23:33]}_to_{folder_title[-10:]}.png", dpi=300)
     plt.close(fig)
 
@@ -972,7 +1003,7 @@ def run_full_spatial_analysis():
         try:
             fig = plot_flood_change_map(
                 masks, current_extent, transform, crs, regions_gdf,
-                inundation_clipped, metas, inundation_file='20250211.tif',
+                inundation_clipped, metas, inundation_file=inundation_file,
                 region_name=region, title=title)
             filename = f"{region_clean}_spatial_prediction_{folder_title[23:33]}_to_{folder_title[-10:]}.png"
             fig.savefig(output_dir / filename, dpi=300)
@@ -981,7 +1012,7 @@ def run_full_spatial_analysis():
             print(f"Error plotting {region}: {e}")
 
     # Export for QGIS
-    export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder_title, metas, inundation_file='20250211.tif')
+    export_qgis_files(masks, current_extent, transform, crs, regions_gdf, folder_title, metas, inundation_file=inundation_file)
 
     # --- Exposure impact reporting for schools and hospitals ---
     hospital_csv = 'data/maps/exposure/hospitals.csv'
@@ -994,12 +1025,12 @@ def run_full_spatial_analysis():
     school_points = get_exposure_points(None, school_csv)
     
     export_impacted_facilities(
-        masks, current_extent, metas, "20250211.tif",
+        masks, current_extent, metas, inundation_file,
         hospital_points, impacted_dir, "impacted_hospitals.csv"
     )
     
     export_impacted_facilities(
-        masks, current_extent, metas, "20250211.tif",
+        masks, current_extent, metas, inundation_file,
         school_points, impacted_dir, "impacted_schools.csv"
     )
     

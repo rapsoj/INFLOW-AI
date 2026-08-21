@@ -2,7 +2,9 @@ data/
 model/testing/
 *.pkl
 *.h5
+*.npy
 *.pt
+*.tif
 *.ckpt
 *.ipynb
 __pycache__/

@@ -25,5 +25,5 @@
 - [ ] Train spatial model again on full data set and deploy
 - [ ] Ensure all pipeline parameters are input in the config and not hardcoded
 
-## Eventually
+## Major Changes
 - [ ] Implement call to LLM with access to White Nile/South Sudan flooding literature to explain model results and interpret data qualitatively

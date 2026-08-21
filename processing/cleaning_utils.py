@@ -165,6 +165,16 @@ def resolve_target_product(target_product=None):
     return resolved
 
 
+<<<<<<< HEAD
+def get_target_historic_path(filename, target_product=None):
+    """Return a historic output path inside the selected product-aligned folder."""
+    target_product = resolve_target_product(target_product)
+    historic_root = get_cfg("paths.historic.root", "data/historic")
+    return os.path.join(historic_root, f"{target_product}-aligned", filename)
+
+
+=======
+>>>>>>> origin/main
 def _target_temporal_candidates(target_product):
     """Return candidate temporal CSV paths for a target product in priority order."""
     target_product = resolve_target_product(target_product)

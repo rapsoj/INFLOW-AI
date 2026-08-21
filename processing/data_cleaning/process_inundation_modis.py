@@ -35,10 +35,17 @@ MODIS_BASE_URL = get_cfg(
     "https://data.earthobservation.vam.wfp.org/public-share/sudd_wetland_monitoring/modis_flood_masks/ssdmask",
 )
 MODIS_DOWNLOAD_PATH = get_cfg("paths.downloads.inundation_modis", "data/downloads/inundation_masks_modis")
+<<<<<<< HEAD
+MODIS_H5_PATH = get_cfg("paths.historic.modis_h5", "data/historic/modis-aligned/inundation_modis.h5")
+MODIS_TEMPORAL_PATH = get_cfg(
+    "paths.historic.inundation_temporal",
+    "data/historic/modis-aligned/inundation_modis_temporal.csv",
+=======
 MODIS_H5_PATH = get_cfg("paths.historic.inundation_h5", "data/historic/inundation.h5")
 MODIS_TEMPORAL_PATH = get_cfg(
     "paths.historic.inundation_temporal",
     "data/historic/inundation_temporal.csv",
+>>>>>>> origin/main
 )
 MODIS_DSET_NAME = "inundation"
 STUDY_START_DATE = get_cfg("runtime.study_start_date", "2002-07-01")

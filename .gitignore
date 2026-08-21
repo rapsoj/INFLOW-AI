@@ -1,3 +1,16 @@
+<<<<<<< HEAD
+data/
+model/testing/
+*.pkl
+*.h5
+*.npy
+*.pt
+*.tif
+*.ckpt
+*.ipynb
+__pycache__/
+.ipynb_checkpoints/
+=======
 .venv/
 .python_packages/
 data/downloads/
@@ -10,3 +23,4 @@ data/maps/**/*.tif
 data/maps/glofas/*.tif
 data/maps/basin_attributes.npy
 data/maps/catchment_array.npy
+>>>>>>> origin/main

@@ -598,6 +598,25 @@ def update_inundation(h5_file_path=VIIRS_H5_PATH,
                     logging.info(f"Existing VIIRS data shape: {viirs_historic.shape}")
                     has_existing_h5 = True
 
+<<<<<<< HEAD
+        if has_existing_h5 and os.path.exists(temporal_data_path):
+            # Crop historic data if historic spatial and temporal data are not the same size
+            crop_historic_data(
+                file_path=h5_file_path,
+                temporal_data_path=temporal_data_path,
+            )
+
+            # Remove burn-in data
+            remove_burn_in_data(
+                h5_file_path=h5_file_path,
+                temporal_data_path=temporal_data_path,
+            )
+        elif has_existing_h5:
+            logging.info(
+                f"VIIRS temporal data not found at {temporal_data_path}; "
+                "skipping historic alignment and burn-in removal."
+            )
+=======
         if has_existing_h5:
             # Crop historic data if historic spatial and temporal data are not the same size
             crop_historic_data(
@@ -607,6 +626,7 @@ def update_inundation(h5_file_path=VIIRS_H5_PATH,
 
             # Remove burn-in data
             remove_burn_in_data()
+>>>>>>> origin/main
         else:
             logging.info(
                 f"Historic VIIRS dataset not found at {h5_file_path}. "

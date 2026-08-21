@@ -43,8 +43,13 @@ DOWNLOADS_ROOT = get_cfg("paths.downloads.root", "data/downloads")
 GR_RAINFALL_DOWNLOAD_PATH = get_cfg("paths.downloads.tamsat_rfe_daily", "data/downloads/tamsat/rfe/data/v3.1/daily")
 EXTRACTED_DOMAIN_PATH = get_cfg("paths.downloads.extracted_domain", "data/downloads/extracted_data/domain")
 GR_RAINFALL_DEKADS_PATH = get_cfg("paths.downloads.tamsat_rfe_dekads", "data/downloads/tamsat/rfe/dekads")
+<<<<<<< HEAD
+GR_RAINFALL_TEMPORAL_PATH = cleaning_utils.get_target_historic_path("gridded_rainfall_temporal.csv")
+GR_RAINFALL_H5_PATH = cleaning_utils.get_target_historic_path("gridded_rainfall.h5")
+=======
 GR_RAINFALL_TEMPORAL_PATH = get_cfg("paths.historic.gridded_rainfall_temporal", "data/historic/gridded_rainfall_temporal.csv")
 GR_RAINFALL_H5_PATH = get_cfg("paths.historic.gridded_rainfall_h5", "data/historic/gridded_rainfall.h5")
+>>>>>>> origin/main
 SAMPLE_TIF_FOLDER = get_cfg("paths.downloads.inundation_modis", "data/downloads/inundation_masks_modis")
 CATCHMENTS_PATH = get_cfg("paths.maps.catchments", "data/maps/inflow_catchments/INFLOW_all_cmts.shp")
 
@@ -224,6 +229,11 @@ def download_new_gridded_rainfall(download_folder, target_product=None):
         target_product=target_product,
     )
 
+<<<<<<< HEAD
+    local_product_path = os.path.join(os.getcwd(), GR_RAINFALL_DOWNLOAD_PATH)
+    local_dates = cleaning_utils.get_local_download_dates(local_product_path)
+    missing_dates = [d for d in new_dates if d not in local_dates]
+=======
     if has_historic_temporal:
         local_dates = cleaning_utils.get_local_download_dates(download_path_full)
         missing_dates = [d for d in new_dates if d not in local_dates]
@@ -231,6 +241,7 @@ def download_new_gridded_rainfall(download_folder, target_product=None):
         # When no temporal record exists yet, rebuild the full historic range
         # instead of treating cached daily files as a complete processed record.
         missing_dates = new_dates
+>>>>>>> origin/main
 
     if missing_dates:
         download_range = [missing_dates[0], missing_dates[-1]]
@@ -239,7 +250,14 @@ def download_new_gridded_rainfall(download_folder, target_product=None):
         # Fail-fast if extraction produced an unreadable or incomplete file.
         _get_latest_valid_rainfall_netcdf(EXTRACTED_DOMAIN_PATH)
     else:
-        logging.info("No new dates to download.")
+        try:
+            _get_latest_valid_rainfall_netcdf(EXTRACTED_DOMAIN_PATH)
+        except RuntimeError:
+            if local_dates:
+                extract_gridded_rainfall([min(local_dates), max(local_dates)], download_folder)
+                _get_latest_valid_rainfall_netcdf(EXTRACTED_DOMAIN_PATH)
+            else:
+                raise
 
 
 def group_dates_by_decade(dates, target_product='modis'):
@@ -334,7 +352,12 @@ def export_decadal_geotiffs(extract_folder, output_folder, target_product='modis
             ) as dst:
                 dst.write(decadal_avg, 1)
 
+<<<<<<< HEAD
+            period_label = 'VIIRS half-month' if target_product == 'viirs' else 'MODIS dekad'
+            print(f'Exported {period_label} GeoTIFF for {first_dekad_str}')
+=======
             print(f'Exported decadal GeoTIFF for {first_dekad_str}')
+>>>>>>> origin/main
         
 
 def crop_historic_data(file_path, temporal_data_path):

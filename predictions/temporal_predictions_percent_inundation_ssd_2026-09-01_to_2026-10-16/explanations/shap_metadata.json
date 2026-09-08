@@ -1,0 +1,664 @@
+{
+  "model_type": "random_forest",
+  "run_id": "20260820T143849Z",
+  "target_type": "seasonally_differenced",
+  "target_product": "viirs",
+  "explanation_date": "2026-08-16",
+  "lead_count": 4,
+  "contribution_percentages": {
+    "1": [
+      {
+        "feature": "CHIRPS",
+        "absolute_shap_share_percent": 3.5505900895679106
+      },
+      {
+        "feature": "dmi",
+        "absolute_shap_share_percent": 14.917979144233337
+      },
+      {
+        "feature": "rainfall_eeq_lag_6",
+        "absolute_shap_share_percent": 0.9540542065477688
+      },
+      {
+        "feature": "ninoANOM_lag_6",
+        "absolute_shap_share_percent": 59.47886135270784
+      },
+      {
+        "feature": "CHIRPS_lag_12",
+        "absolute_shap_share_percent": 11.529771076181643
+      },
+      {
+        "feature": "oniANOM_lag_12",
+        "absolute_shap_share_percent": 2.2072672100583683
+      },
+      {
+        "feature": "ninoANOM.3_lag_12",
+        "absolute_shap_share_percent": 2.3679827664980384
+      },
+      {
+        "feature": "setio_lag_12",
+        "absolute_shap_share_percent": 4.993494154205092
+      }
+    ],
+    "2": [
+      {
+        "feature": "dmi",
+        "absolute_shap_share_percent": 3.0324111622628136
+      },
+      {
+        "feature": "mjo40W_lag_1",
+        "absolute_shap_share_percent": 0.8597993759603126
+      },
+      {
+        "feature": "rainfall_eeq_lag_2",
+        "absolute_shap_share_percent": 0.21314007217832515
+      },
+      {
+        "feature": "rainfall_jon_lag_2",
+        "absolute_shap_share_percent": 1.2871963432029694
+      },
+      {
+        "feature": "mjo120E_lag_2",
+        "absolute_shap_share_percent": 1.5744757079540848
+      },
+      {
+        "feature": "ninoANOM_lag_3",
+        "absolute_shap_share_percent": 41.58539498762557
+      },
+      {
+        "feature": "TAMSAT_cumulative_lag_6",
+        "absolute_shap_share_percent": 15.602684141885486
+      },
+      {
+        "feature": "ninoANOM_lag_6",
+        "absolute_shap_share_percent": 27.851623708374312
+      },
+      {
+        "feature": "wtio_lag_6",
+        "absolute_shap_share_percent": 2.0351843785528136
+      },
+      {
+        "feature": "CHIRPS_lag_12",
+        "absolute_shap_share_percent": 0.761035264988878
+      },
+      {
+        "feature": "oniANOM_lag_12",
+        "absolute_shap_share_percent": 1.8155495939961086
+      },
+      {
+        "feature": "setio_lag_12",
+        "absolute_shap_share_percent": 0.344511988997453
+      },
+      {
+        "feature": "CHIRPS_cumulative_scaled",
+        "absolute_shap_share_percent": 1.2523994028495389
+      },
+      {
+        "feature": "rainfall_aby_cumulative_scaled",
+        "absolute_shap_share_percent": 0.07450814450412586
+      },
+      {
+        "feature": "rainfall_eeq_cumulative_scaled",
+        "absolute_shap_share_percent": 1.3871420104461194
+      },
+      {
+        "feature": "rainfall_upn_cumulative_scaled",
+        "absolute_shap_share_percent": 0.3229437162210939
+      }
+    ],
+    "3": [
+      {
+        "feature": "rainfall_nbg",
+        "absolute_shap_share_percent": 0.0394568471910914
+      },
+      {
+        "feature": "rainfall_uni",
+        "absolute_shap_share_percent": 0.2044236160538248
+      },
+      {
+        "feature": "rainfall_upn",
+        "absolute_shap_share_percent": 0.04838505824292937
+      },
+      {
+        "feature": "rainfall_war",
+        "absolute_shap_share_percent": 0.09725413527199676
+      },
+      {
+        "feature": "rainfall_wbg",
+        "absolute_shap_share_percent": 0.0676075833968477
+      },
+      {
+        "feature": "rainfall_weq",
+        "absolute_shap_share_percent": 0.35798899550499835
+      },
+      {
+        "feature": "rainfall_aby",
+        "absolute_shap_share_percent": 0.7232836518543851
+      },
+      {
+        "feature": "year",
+        "absolute_shap_share_percent": 0.006958327748778113
+      },
+      {
+        "feature": "month",
+        "absolute_shap_share_percent": 0.05616556283871824
+      },
+      {
+        "feature": "kyoga_height_variation",
+        "absolute_shap_share_percent": 0.3421676386579948
+      },
+      {
+        "feature": "TAMSAT",
+        "absolute_shap_share_percent": 0.8614717256673219
+      },
+      {
+        "feature": "CHIRPS",
+        "absolute_shap_share_percent": 0.40749325994770036
+      },
+      {
+        "feature": "TAMSAT_cumulative",
+        "absolute_shap_share_percent": 0.09952522690483548
+      },
+      {
+        "feature": "CHIRPS_cumulative",
+        "absolute_shap_share_percent": 0.0128472189344056
+      },
+      {
+        "feature": "oniTOTAL",
+        "absolute_shap_share_percent": 1.1533188255456759
+      },
+      {
+        "feature": "oniANOM",
+        "absolute_shap_share_percent": 1.2900699364631463
+      },
+      {
+        "feature": "ninoNINO1+2",
+        "absolute_shap_share_percent": 0.12071031550137724
+      },
+      {
+        "feature": "ninoANOM",
+        "absolute_shap_share_percent": 5.398513154424098
+      },
+      {
+        "feature": "ninoNINO3",
+        "absolute_shap_share_percent": 0.23746716568216011
+      },
+      {
+        "feature": "ninoANOM.1",
+        "absolute_shap_share_percent": 12.228257746130586
+      },
+      {
+        "feature": "mjo80E",
+        "absolute_shap_share_percent": 0.17704620845349467
+      },
+      {
+        "feature": "dmi",
+        "absolute_shap_share_percent": 0.058037396091218094
+      },
+      {
+        "feature": "rainfall_eeq_lag_1",
+        "absolute_shap_share_percent": 0.04909831427577984
+      },
+      {
+        "feature": "rainfall_jon_lag_1",
+        "absolute_shap_share_percent": 0.29815417252915605
+      },
+      {
+        "feature": "rainfall_war_lag_1",
+        "absolute_shap_share_percent": 0.023890371408053335
+      },
+      {
+        "feature": "TAMSAT_lag_1",
+        "absolute_shap_share_percent": 2.828974239553958
+      },
+      {
+        "feature": "CHIRPS_cumulative_lag_1",
+        "absolute_shap_share_percent": 0.0629548540461699
+      },
+      {
+        "feature": "oniTOTAL_lag_1",
+        "absolute_shap_share_percent": 0.32314251430092983
+      },
+      {
+        "feature": "oniANOM_lag_1",
+        "absolute_shap_share_percent": 0.5931041132740879
+      },
+      {
+        "feature": "ninoNINO1+2_lag_1",
+        "absolute_shap_share_percent": 0.28505279971829456
+      },
+      {
+        "feature": "ninoANOM_lag_1",
+        "absolute_shap_share_percent": 7.026389735605817
+      },
+      {
+        "feature": "ninoNINO3_lag_1",
+        "absolute_shap_share_percent": 0.09999493656520149
+      },
+      {
+        "feature": "ninoANOM.1_lag_1",
+        "absolute_shap_share_percent": 0.3679171730883031
+      },
+      {
+        "feature": "ninoNINO4_lag_1",
+        "absolute_shap_share_percent": 0.6094420955125169
+      },
+      {
+        "feature": "ninoANOM.2_lag_1",
+        "absolute_shap_share_percent": 0.033230658105927666
+      },
+      {
+        "feature": "ninoNINO3.4_lag_1",
+        "absolute_shap_share_percent": 0.36932775991400596
+      },
+      {
+        "feature": "ninoANOM.3_lag_1",
+        "absolute_shap_share_percent": 6.042792955803625
+      },
+      {
+        "feature": "mjo20E_lag_1",
+        "absolute_shap_share_percent": 0.1371329730320118
+      },
+      {
+        "feature": "mjo70E_lag_1",
+        "absolute_shap_share_percent": 0.05184478995700893
+      },
+      {
+        "feature": "mjo80E_lag_1",
+        "absolute_shap_share_percent": 0.06113509869551691
+      },
+      {
+        "feature": "mjo100E_lag_1",
+        "absolute_shap_share_percent": 0.07688394470096155
+      },
+      {
+        "feature": "mjo120E_lag_1",
+        "absolute_shap_share_percent": 0.017196563749945954
+      },
+      {
+        "feature": "mjo140E_lag_1",
+        "absolute_shap_share_percent": 0.007488597867410025
+      },
+      {
+        "feature": "mjo160E_lag_1",
+        "absolute_shap_share_percent": 0.5276718894404364
+      },
+      {
+        "feature": "mjo120W_lag_1",
+        "absolute_shap_share_percent": 0.0829942563224016
+      },
+      {
+        "feature": "mjo40W_lag_1",
+        "absolute_shap_share_percent": 0.08968487177465288
+      },
+      {
+        "feature": "mjo10W_lag_1",
+        "absolute_shap_share_percent": 0.060496555624659484
+      },
+      {
+        "feature": "soi_anom_lag_1",
+        "absolute_shap_share_percent": 0.18057257590157014
+      },
+      {
+        "feature": "wtio_lag_1",
+        "absolute_shap_share_percent": 0.09441695184204157
+      },
+      {
+        "feature": "setio_lag_1",
+        "absolute_shap_share_percent": 0.13536814226892743
+      },
+      {
+        "feature": "dmi_lag_1",
+        "absolute_shap_share_percent": 0.013883518941017444
+      },
+      {
+        "feature": "victoria_height_variation_lag_1",
+        "absolute_shap_share_percent": 0.09001625890560445
+      },
+      {
+        "feature": "albert_water_level_lag_2",
+        "absolute_shap_share_percent": 0.02027590565218697
+      },
+      {
+        "feature": "moisture_lag_2",
+        "absolute_shap_share_percent": 0.02282315129918417
+      },
+      {
+        "feature": "moisture_ceq_lag_2",
+        "absolute_shap_share_percent": 0.03558028244892465
+      },
+      {
+        "feature": "moisture_eeq_lag_2",
+        "absolute_shap_share_percent": 0.1019201888976945
+      },
+      {
+        "feature": "moisture_jon_lag_2",
+        "absolute_shap_share_percent": 0.09731633389873066
+      },
+      {
+        "feature": "moisture_lak_lag_2",
+        "absolute_shap_share_percent": 0.0016205513283752075
+      },
+      {
+        "feature": "moisture_nbg_lag_2",
+        "absolute_shap_share_percent": 0.04818438485819072
+      },
+      {
+        "feature": "moisture_uni_lag_2",
+        "absolute_shap_share_percent": 0.1388398981298416
+      },
+      {
+        "feature": "moisture_upn_lag_2",
+        "absolute_shap_share_percent": 0.031664655283565615
+      },
+      {
+        "feature": "moisture_war_lag_2",
+        "absolute_shap_share_percent": 0.16113155828037304
+      },
+      {
+        "feature": "moisture_wbg_lag_2",
+        "absolute_shap_share_percent": 0.02267870224625178
+      },
+      {
+        "feature": "moisture_weq_lag_2",
+        "absolute_shap_share_percent": 0.013016423384653761
+      },
+      {
+        "feature": "moisture_aby_lag_2",
+        "absolute_shap_share_percent": 0.05328196572230359
+      },
+      {
+        "feature": "rainfall_lag_2",
+        "absolute_shap_share_percent": 2.024320591943175
+      },
+      {
+        "feature": "rainfall_ceq_lag_2",
+        "absolute_shap_share_percent": 0.1512795204446528
+      },
+      {
+        "feature": "rainfall_eeq_lag_2",
+        "absolute_shap_share_percent": 0.023046606619460733
+      },
+      {
+        "feature": "rainfall_jon_lag_2",
+        "absolute_shap_share_percent": 0.2970656640217366
+      },
+      {
+        "feature": "rainfall_lak_lag_2",
+        "absolute_shap_share_percent": 0.2859392445300035
+      },
+      {
+        "feature": "rainfall_nbg_lag_2",
+        "absolute_shap_share_percent": 0.5028714545660873
+      },
+      {
+        "feature": "rainfall_uni_lag_2",
+        "absolute_shap_share_percent": 0.027870985594017756
+      },
+      {
+        "feature": "rainfall_upn_lag_2",
+        "absolute_shap_share_percent": 1.4765518662906385
+      },
+      {
+        "feature": "rainfall_war_lag_2",
+        "absolute_shap_share_percent": 0.4591551558153732
+      },
+      {
+        "feature": "rainfall_wbg_lag_2",
+        "absolute_shap_share_percent": 0.22902260698354193
+      },
+      {
+        "feature": "rainfall_weq_lag_2",
+        "absolute_shap_share_percent": 0.027019639684618256
+      },
+      {
+        "feature": "rainfall_aby_lag_2",
+        "absolute_shap_share_percent": 0.2207757103173818
+      },
+      {
+        "feature": "year_lag_2",
+        "absolute_shap_share_percent": 0.06928685672578387
+      },
+      {
+        "feature": "month_lag_2",
+        "absolute_shap_share_percent": 0.022206243507743476
+      },
+      {
+        "feature": "kyoga_height_variation_lag_2",
+        "absolute_shap_share_percent": 0.04562928648895978
+      },
+      {
+        "feature": "TAMSAT_lag_2",
+        "absolute_shap_share_percent": 0.10996418645224679
+      },
+      {
+        "feature": "CHIRPS_lag_2",
+        "absolute_shap_share_percent": 0.1142464049780344
+      },
+      {
+        "feature": "TAMSAT_cumulative_lag_2",
+        "absolute_shap_share_percent": 0.09341441601755171
+      },
+      {
+        "feature": "CHIRPS_cumulative_lag_2",
+        "absolute_shap_share_percent": 0.06707520538055292
+      },
+      {
+        "feature": "oniTOTAL_lag_2",
+        "absolute_shap_share_percent": 0.16443260492598782
+      },
+      {
+        "feature": "oniANOM_lag_2",
+        "absolute_shap_share_percent": 0.06354589063788507
+      },
+      {
+        "feature": "ninoNINO1+2_lag_2",
+        "absolute_shap_share_percent": 0.23065196326609905
+      },
+      {
+        "feature": "ninoANOM_lag_2",
+        "absolute_shap_share_percent": 10.843341833051818
+      },
+      {
+        "feature": "ninoNINO3_lag_2",
+        "absolute_shap_share_percent": 0.008975119378464333
+      },
+      {
+        "feature": "ninoANOM.1_lag_2",
+        "absolute_shap_share_percent": 0.224889092375414
+      },
+      {
+        "feature": "ninoNINO4_lag_2",
+        "absolute_shap_share_percent": 0.39103447870135155
+      },
+      {
+        "feature": "ninoANOM.2_lag_2",
+        "absolute_shap_share_percent": 0.014405598329028744
+      },
+      {
+        "feature": "ninoNINO3.4_lag_2",
+        "absolute_shap_share_percent": 0.6951747773193311
+      },
+      {
+        "feature": "ninoANOM.3_lag_2",
+        "absolute_shap_share_percent": 0.3261045168411716
+      },
+      {
+        "feature": "mjo20E_lag_2",
+        "absolute_shap_share_percent": 0.11419774522742732
+      },
+      {
+        "feature": "mjo70E_lag_2",
+        "absolute_shap_share_percent": 0.0133498875346114
+      },
+      {
+        "feature": "mjo80E_lag_2",
+        "absolute_shap_share_percent": 0.03835599268927882
+      },
+      {
+        "feature": "mjo100E_lag_2",
+        "absolute_shap_share_percent": 0.19491271491346168
+      },
+      {
+        "feature": "mjo120E_lag_2",
+        "absolute_shap_share_percent": 0.15468834292617412
+      },
+      {
+        "feature": "mjo140E_lag_2",
+        "absolute_shap_share_percent": 0.08676158791870087
+      },
+      {
+        "feature": "mjo160E_lag_2",
+        "absolute_shap_share_percent": 0.22134713084829413
+      },
+      {
+        "feature": "mjo120W_lag_2",
+        "absolute_shap_share_percent": 0.14968129331951163
+      },
+      {
+        "feature": "rainfall_eeq_lag_3",
+        "absolute_shap_share_percent": 0.38128344523689267
+      },
+      {
+        "feature": "ninoANOM_lag_3",
+        "absolute_shap_share_percent": 6.353243323026458
+      },
+      {
+        "feature": "mjo20E_lag_3",
+        "absolute_shap_share_percent": 0.08760998891457149
+      },
+      {
+        "feature": "mjo140E_lag_3",
+        "absolute_shap_share_percent": 0.06610665750443882
+      },
+      {
+        "feature": "soi_anom_lag_3",
+        "absolute_shap_share_percent": 0.5771686578279988
+      },
+      {
+        "feature": "wtio_lag_3",
+        "absolute_shap_share_percent": 0.4300493721593584
+      },
+      {
+        "feature": "rainfall_eeq_lag_6",
+        "absolute_shap_share_percent": 0.041376423613486674
+      },
+      {
+        "feature": "TAMSAT_cumulative_lag_6",
+        "absolute_shap_share_percent": 2.035712700618846
+      },
+      {
+        "feature": "ninoANOM_lag_6",
+        "absolute_shap_share_percent": 18.736893804816305
+      },
+      {
+        "feature": "mjo20E_lag_6",
+        "absolute_shap_share_percent": 0.9028582342453122
+      },
+      {
+        "feature": "mjo140E_lag_6",
+        "absolute_shap_share_percent": 0.3029907093305261
+      },
+      {
+        "feature": "rainfall_ceq_lag_12",
+        "absolute_shap_share_percent": 0.9293803529011314
+      },
+      {
+        "feature": "kyoga_height_variation_lag_12",
+        "absolute_shap_share_percent": 0.0058882188009762
+      },
+      {
+        "feature": "oniANOM_lag_12",
+        "absolute_shap_share_percent": 0.6208565479565211
+      },
+      {
+        "feature": "mjo80E_lag_12",
+        "absolute_shap_share_percent": 0.11791699093318196
+      },
+      {
+        "feature": "wtio_lag_12",
+        "absolute_shap_share_percent": 0.03444810451234576
+      },
+      {
+        "feature": "setio_lag_12",
+        "absolute_shap_share_percent": 1.293997127531541
+      },
+      {
+        "feature": "CHIRPS_cumulative_scaled",
+        "absolute_shap_share_percent": 0.055023613621808874
+      },
+      {
+        "feature": "CHIRPS_cumulative_cumulative_scaled",
+        "absolute_shap_share_percent": 0.19842958939327082
+      },
+      {
+        "feature": "TAMSAT_cumulative_cumulative_scaled",
+        "absolute_shap_share_percent": 0.12429670566363582
+      },
+      {
+        "feature": "rainfall_eeq_cumulative_scaled",
+        "absolute_shap_share_percent": 0.5914060193208048
+      },
+      {
+        "feature": "rainfall_lak_cumulative_scaled",
+        "absolute_shap_share_percent": 0.12985113957987832
+      },
+      {
+        "feature": "rainfall_nbg_cumulative_scaled",
+        "absolute_shap_share_percent": 0.12246573558560774
+      },
+      {
+        "feature": "rainfall_upn_cumulative_scaled",
+        "absolute_shap_share_percent": 0.029494377350038497
+      },
+      {
+        "feature": "rainfall_wbg_cumulative_scaled",
+        "absolute_shap_share_percent": 0.031446030605018674
+      },
+      {
+        "feature": "rainfall_weq_cumulative_scaled",
+        "absolute_shap_share_percent": 0.24017663172060627
+      }
+    ],
+    "4": [
+      {
+        "feature": "setio",
+        "absolute_shap_share_percent": 0.2761301346556264
+      },
+      {
+        "feature": "ninoANOM_lag_1",
+        "absolute_shap_share_percent": 41.860233437295115
+      },
+      {
+        "feature": "ninoANOM_lag_2",
+        "absolute_shap_share_percent": 40.14920242009812
+      },
+      {
+        "feature": "rainfall_eeq_lag_3",
+        "absolute_shap_share_percent": 0.552296653574092
+      },
+      {
+        "feature": "TAMSAT_cumulative_lag_6",
+        "absolute_shap_share_percent": 5.825624248427051
+      },
+      {
+        "feature": "oniANOM_lag_12",
+        "absolute_shap_share_percent": 1.3532499994982157
+      },
+      {
+        "feature": "setio_lag_12",
+        "absolute_shap_share_percent": 8.134195905027749
+      },
+      {
+        "feature": "CHIRPS_cumulative_scaled",
+        "absolute_shap_share_percent": 1.8490672014240275
+      }
+    ]
+  },
+  "plots": [
+    "predictions/temporal_predictions_percent_inundation_ssd_2026-09-01_to_2026-10-16/explanations/shap_waterfall_lead_1.png",
+    "predictions/temporal_predictions_percent_inundation_ssd_2026-09-01_to_2026-10-16/explanations/shap_waterfall_lead_2.png",
+    "predictions/temporal_predictions_percent_inundation_ssd_2026-09-01_to_2026-10-16/explanations/shap_waterfall_lead_3.png",
+    "predictions/temporal_predictions_percent_inundation_ssd_2026-09-01_to_2026-10-16/explanations/shap_waterfall_lead_4.png"
+  ]
+}

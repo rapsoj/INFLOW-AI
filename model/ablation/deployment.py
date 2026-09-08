@@ -231,6 +231,14 @@ def retrain_best_model_on_available_data(row: dict[str, Any]) -> dict[str, Any]:
 
     target_anchor_date = pd.to_datetime(observed_target_history["date"]).max()
     transformed_target = _target_transform(raw_temporal[["date", "target_raw"]].copy(), target_type=target_type, product=product)
+    non_null_target_raw = int(raw_temporal["target_raw"].notna().sum())
+    non_null_transformed_target = int(transformed_target["target"].notna().sum())
+    logging.info(
+        "Runtime retraining target coverage: %d non-null target_raw values, %d non-null transformed targets, anchor=%s.",
+        non_null_target_raw,
+        non_null_transformed_target,
+        target_anchor_date.date(),
+    )
 
     base_features = raw_temporal.drop(columns=["target_raw"]).copy()
     if "period_order" in base_features.columns and bool(get_cfg("ablation.pipeline.drop_metadata_columns", True)):
@@ -261,8 +269,16 @@ def retrain_best_model_on_available_data(row: dict[str, Any]) -> dict[str, Any]:
         # Features at t predict transformed target at t + lead.
         y_shifted = transformed_target["target"].shift(-lead)
         train_mask = (origin_dates <= target_anchor_date) & y_shifted.notna()
+        shifted_label_count = int(y_shifted.notna().sum())
+        trainable_row_count = int(train_mask.sum())
+        logging.info(
+            "Runtime retraining lead %d coverage: %d non-null shifted labels, %d trainable rows.",
+            lead,
+            shifted_label_count,
+            trainable_row_count,
+        )
 
-        if int(train_mask.sum()) == 0:
+        if trainable_row_count == 0:
             raise RuntimeError(f"Runtime retraining has no labeled samples for lead {lead}.")
 
         x_train = transformed_features.loc[train_mask, selected_features].to_numpy(dtype=np.float64)
@@ -298,6 +314,18 @@ def _apply_saved_feature_transforms(
 
     imputer = scaler_bundle["imputer"]
     scaler = scaler_bundle["scaler"]
+
+    if (
+        imputer.__class__.__name__ == "SimpleImputer"
+        and not hasattr(imputer, "_fill_dtype")
+        and hasattr(imputer, "_fit_dtype")
+    ):
+        logging.warning(
+            "Loaded a legacy SimpleImputer artifact without _fill_dtype; patching it from _fit_dtype "
+            "to stay compatible with the active scikit-learn runtime."
+        )
+        imputer._fill_dtype = imputer._fit_dtype
+
     raw_features = features_df[feature_cols]
     missing_cells = int(raw_features.isna().sum().sum())
     total_cells = int(raw_features.shape[0] * raw_features.shape[1])

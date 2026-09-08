@@ -49,6 +49,38 @@ def _prediction_output_dir(target_column: str, future_dates: list[pd.Timestamp])
     return Path("predictions") / f"temporal_predictions_{target_column}_{start}_to_{end}"
 
 
+def _forecast_window_end_date(date: pd.Timestamp, target_product: str) -> pd.Timestamp:
+    date = pd.Timestamp(date)
+    product = str(target_product).strip().lower()
+
+    if product == "viirs":
+        if date.day <= 1:
+            return date.replace(day=16)
+        if date.day <= 16:
+            next_month = date + pd.offsets.MonthBegin(1)
+            return pd.Timestamp(next_month)
+        raise ValueError(f"Unexpected VIIRS forecast anchor date: {date}")
+
+    if product == "modis":
+        if date.day <= 1:
+            return date.replace(day=11)
+        if date.day <= 11:
+            return date.replace(day=21)
+        if date.day <= 21:
+            next_month = date + pd.offsets.MonthBegin(1)
+            return pd.Timestamp(next_month)
+        raise ValueError(f"Unexpected MODIS forecast anchor date: {date}")
+
+    raise ValueError(f"Unsupported target product for forecast window formatting: {target_product}")
+
+
+def _prediction_title_with_range(bundle) -> str:
+    pred_dates = pd.to_datetime(bundle.future_dates)
+    display_start = pred_dates.min().strftime("%Y-%m-%d")
+    display_end = _forecast_window_end_date(pred_dates.max(), bundle.target_product).strftime("%Y-%m-%d")
+    return f"{_target_display_name(bundle.target_column)}, {display_start} to {display_end}"
+
+
 def export_model_report(bundle) -> Path:
     """Write model identity, held-out metrics, and runtime retraining metadata."""
     output_dir = _prediction_output_dir(bundle.target_column, bundle.future_dates)
@@ -253,6 +285,7 @@ def export_graphs(bundle) -> list[Path]:
     pred_dates = pd.to_datetime(bundle.future_dates)
 
     title_root = _target_display_name(bundle.target_column)
+    prediction_title = _prediction_title_with_range(bundle)
     paths: list[Path] = []
 
     windows = [
@@ -282,9 +315,7 @@ def export_graphs(bundle) -> list[Path]:
         )
         ax.axvline(bundle.origin_date, color="#222", linestyle=":", linewidth=1.0)
 
-        ax.set_title(
-            f"{title_root}, {pred_dates.min().date().strftime('%Y-%m-%d')} to {pred_dates.max().date().strftime('%Y-%m-%d')}"
-        )
+        ax.set_title(prediction_title)
         ax.set_xlabel("Year")
         ax.set_ylabel("Inundated Area (km²)")
         ax.yaxis.set_major_formatter(StrMethodFormatter("{x:,.0f}"))
@@ -394,7 +425,7 @@ def export_graphs(bundle) -> list[Path]:
         end_row = group.iloc[-1]
         ax.text(end_row["plot_day"], end_row["km2"], str(year), fontsize=9, va="center")
 
-    ax.set_title(f"{title_root}, Year-by-Year Comparison")
+    ax.set_title(f"{prediction_title}, Year-by-Year Comparison")
     ax.set_xlabel("Month of Year")
     ax.set_ylabel("Inundated Area (km²)")
     ax.yaxis.set_major_formatter(StrMethodFormatter("{x:,.0f}"))

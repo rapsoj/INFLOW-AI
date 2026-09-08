@@ -2,22 +2,22 @@
 geopandas==1.0.1
 descartes
 h5py==3.12.1
-joblib==1.5.0
+joblib==1.5.3
 loguru==0.7.3
 matplotlib==3.10.0
 netCDF4==1.7.2
 numpy>=2.0.0
-pandas==2.2.2
+pandas==3.0.1
 py_hydroweb==1.0.2
 rasterio==1.4.3
 requests==2.32.4
 PyYAML>=6.0.1
-scikit-learn==1.6.1
-shap==0.46.0
+scikit-learn==1.8.0
+shap==0.52.0
 scipy>=1.14.1
 shapely
-tensorflow==2.19.0
-keras>=3.0.0
+tensorflow==2.19.0; python_version < "3.13"
+keras>=3.0.0; python_version < "3.13"
 ml-dtypes>=0.5.0
 tqdm>=4.66.0
 typer==0.15.1
